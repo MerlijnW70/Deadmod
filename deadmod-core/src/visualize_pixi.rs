@@ -42,7 +42,10 @@ pub fn generate_pixi_graph(mods: &HashMap<String, ModuleInfo>, reachable: &HashS
         let cluster = extract_parent_module(&info.path.display().to_string());
         clusters.insert(cluster.clone());
 
-        let path_escaped = info.path.display().to_string().replace('\\', "\\\\").replace('"', "\\\"");
+        // Strip Windows extended-length path prefix
+        let path_str = info.path.display().to_string();
+        let path_clean = path_str.strip_prefix(r"\\?\").unwrap_or(&path_str);
+        let path_escaped = path_clean.replace('\\', "\\\\").replace('"', "\\\"");
 
         // Module metadata
         let ref_count = info.refs.len();

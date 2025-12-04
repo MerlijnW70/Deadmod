@@ -1,281 +1,395 @@
 {
+  "metadata": {
+    "cache_version": 2,
+    "deadmod_version": "0.1.0",
+    "created_at": 1764858335
+  },
   "modules": {
-    "trait_graph": {
-      "hash": "e3fa9609978d490e85f74aaa75da12980081f2f3a0784c3f30c7ec8bfd574e27",
+    "lib": {
+      "hash": "90c649f03d052da572f3c7684fa051f966516dde32fc9838e92d40f02a72c58f",
       "refs": [
-        "std",
-        "trait_usage",
-        "trait_extractor"
-      ]
-    },
-    "workspace": {
-      "hash": "5532127f62bd42cce884a797eedb1dfa1ed6ee3cef746c4eccf13fab83fc7195",
-      "refs": [
+        "graph",
+        "visualize_html",
         "cache",
-        "reachable_from_roots",
-        "gather_rs_files",
-        "std",
-        "serde",
+        "func",
+        "visualize_pixi",
         "visualize",
-        "find_dead",
-        "rayon",
-        "anyhow",
-        "find_root_modules",
-        "build_graph"
-      ]
-    },
-    "trait_extractor": {
-      "hash": "fdab34d1d2e6efcab2a8678f0b67db30b9fd178e225ab6686ceaf1f57c63bbab",
-      "refs": [
-        "serde",
-        "syn",
-        "std"
-      ]
-    },
-    "visualize": {
-      "hash": "99f8e203a59e3b7a42b534735af02b9098d171a0b3c7961d43c77d406dc6bc71",
-      "refs": [
-        "std",
-        "parse"
-      ]
-    },
-    "func_graph": {
-      "hash": "0f517f4eb5ebd7567c165888e8b2d51a000dcfe5fd55ce3c4babde1ba0ca83ea",
-      "refs": [
-        "std",
-        "func_extractor"
-      ]
-    },
-    "config": {
-      "hash": "f5e26aaf8e514fc178a2379687cd665fe4f87d5f45ef6da9353af7840106e8ac",
-      "refs": [
-        "Result",
-        "Deserialize",
-        "Path",
-        "Context",
-        "fs"
-      ]
-    },
-    "match_graph": {
-      "hash": "c2bc2677a56225f34800f5726dd3365319ac7f9f200e7c90bde18a026f344786",
-      "refs": [
-        "match_usage",
-        "std",
-        "match_extractor"
-      ]
-    },
-    "match_extractor": {
-      "hash": "9d96ff246aaafdc759f7e71604f8eceb9993618300da61f61aee4a442922d30a",
-      "refs": [
-        "std",
-        "serde",
-        "syn"
-      ]
-    },
-    "const_graph": {
-      "hash": "d5cb257bc50455adcd4469f0fd1121a099e29763b8210671e5b7794a628b42f8",
-      "refs": [
-        "std",
-        "const_usage",
-        "const_extractor"
-      ]
+        "scan",
+        "root",
+        "matcharms",
+        "traits",
+        "generics",
+        "config",
+        "enums",
+        "error",
+        "macros",
+        "fix",
+        "callgraph",
+        "builder",
+        "prelude",
+        "logging",
+        "constants",
+        "tests",
+        "detect",
+        "parse",
+        "workspace",
+        "report"
+      ],
+      "visibility": "Private",
+      "doc_hidden": false
     },
     "generic_graph": {
       "hash": "6e4c492c66a266688ffe323d944e91e14c9553804f5ee442a283043bc50bf143",
       "refs": [
         "generic_extractor",
-        "std",
-        "generic_usage"
-      ]
+        "generic_usage",
+        "std"
+      ],
+      "visibility": "Private",
+      "doc_hidden": false
     },
-    "macro_usage": {
-      "hash": "f9314320a1667abd4e16c7cffdb6f91504227a5942bcb47a039670ce8b301b84",
+    "root": {
+      "hash": "86205333ee57344cb937964238b336fc1ca5725ee5602adb9b05aef7e850d67d",
+      "refs": [
+        "std"
+      ],
+      "visibility": "Private",
+      "doc_hidden": false
+    },
+    "visualize_pixi": {
+      "hash": "2c063f08551e21e1d6d1eb51eabbce729c8a373c05368b11d260ed56bb0ddd77",
       "refs": [
         "std",
-        "syn"
-      ]
+        "parse"
+      ],
+      "visibility": "Private",
+      "doc_hidden": false
+    },
+    "enum_graph": {
+      "hash": "497b4e752c84e7334c539505e50c47e623e0149311d9ca90b9dec1a2be0bdb5d",
+      "refs": [
+        "enum_usage",
+        "enum_extractor",
+        "std"
+      ],
+      "visibility": "Private",
+      "doc_hidden": false
+    },
+    "enum_usage": {
+      "hash": "ab1308dbf3addb6474d075a609c88924744704af75c2d3d7843f0539d4a1c3f4",
+      "refs": [
+        "syn",
+        "std"
+      ],
+      "visibility": "Private",
+      "doc_hidden": false
+    },
+    "const_graph": {
+      "hash": "d5cb257bc50455adcd4469f0fd1121a099e29763b8210671e5b7794a628b42f8",
+      "refs": [
+        "const_extractor",
+        "std",
+        "const_usage"
+      ],
+      "visibility": "Private",
+      "doc_hidden": false
+    },
+    "func_extractor": {
+      "hash": "59c06cbdb762a4d093551200d218b6e89bf470a0a69695f6b6357c1f245c36b2",
+      "refs": [
+        "serde",
+        "anyhow",
+        "syn",
+        "std"
+      ],
+      "visibility": "Private",
+      "doc_hidden": false
+    },
+    "usage": {
+      "hash": "96721515318e347b0f39972ee0b1decae953822f2ba00d2a52a45b1749eb308a",
+      "refs": [
+        "syn",
+        "path_resolver",
+        "std"
+      ],
+      "visibility": "Private",
+      "doc_hidden": false
+    },
+    "mod": {
+      "hash": "c0990a927029ffd637828ebb8e8632657c546d555bfd6be756802d30036c785f",
+      "refs": [
+        "const_graph",
+        "const_usage",
+        "const_extractor"
+      ],
+      "visibility": "Private",
+      "doc_hidden": false
+    },
+    "workspace": {
+      "hash": "0fa4c016ab8be9463d3ddd73cc5a6c1c824ca1b55f43c3112f7609d7acae38d6",
+      "refs": [
+        "visualize",
+        "cache",
+        "reachable_from_roots",
+        "build_graph",
+        "find_dead",
+        "std",
+        "find_root_modules",
+        "rayon",
+        "serde",
+        "anyhow",
+        "gather_rs_files"
+      ],
+      "visibility": "Private",
+      "doc_hidden": false
+    },
+    "error": {
+      "hash": "1d084f65e3f43761eb1f46d4f6d2134b7e015632f887e4a8846787bd05587908",
+      "refs": [
+        "std",
+        "thiserror"
+      ],
+      "visibility": "Private",
+      "doc_hidden": false
+    },
+    "visualize": {
+      "hash": "99f8e203a59e3b7a42b534735af02b9098d171a0b3c7961d43c77d406dc6bc71",
+      "refs": [
+        "parse",
+        "std"
+      ],
+      "visibility": "Private",
+      "doc_hidden": false
+    },
+    "path_resolver": {
+      "hash": "663668b84553e78710489981c39de2ee893a98b3c097ef04b2640f163695b00d",
+      "refs": [
+        "syn",
+        "std"
+      ],
+      "visibility": "Private",
+      "doc_hidden": false
     },
     "enum_extractor": {
       "hash": "f50a3e9ddc240c7ec445803210870fa50745a93ee7eade685c7f85c82752d9d6",
       "refs": [
         "syn",
-        "serde",
-        "std"
-      ]
-    },
-    "macro_graph": {
-      "hash": "0bbe7d348c290eaf4e71ba17db44c33c3db0fad9f9b3ac3f29856542f2aaef37",
-      "refs": [
-        "macro_usage",
-        "macro_extractor",
-        "std"
-      ]
-    },
-    "func_extractor": {
-      "hash": "59c06cbdb762a4d093551200d218b6e89bf470a0a69695f6b6357c1f245c36b2",
-      "refs": [
-        "syn",
-        "serde",
         "std",
-        "anyhow"
-      ]
-    },
-    "lib": {
-      "hash": "3d1c4317c3bb15775c424a0da5173ae5e493a1aad6b835c72ce180070cced6c1",
-      "refs": [
-        "cache",
-        "macros",
-        "detect",
-        "logging",
-        "root",
-        "callgraph",
-        "enums",
-        "config",
-        "scan",
-        "traits",
-        "fix",
-        "visualize_pixi",
-        "parse",
-        "graph",
-        "visualize_html",
-        "matcharms",
-        "func",
-        "generics",
-        "constants",
-        "report",
-        "visualize",
-        "workspace",
-        "tests"
-      ]
-    },
-    "usage": {
-      "hash": "52fcf53bf8888aff811c6841addb54c5a0701daa6c461ae58573ef190c9bcd44",
-      "refs": [
-        "syn",
-        "std"
-      ]
-    },
-    "parse": {
-      "hash": "0fb4a52e493ccc683c121690c0db64553fc73fa52d64899d3f25dc2d902c5976",
-      "refs": [
-        "std",
-        "rayon",
-        "syn",
-        "anyhow"
-      ]
-    },
-    "enum_graph": {
-      "hash": "497b4e752c84e7334c539505e50c47e623e0149311d9ca90b9dec1a2be0bdb5d",
-      "refs": [
-        "std",
-        "enum_extractor",
-        "enum_usage"
-      ]
-    },
-    "match_usage": {
-      "hash": "b18138ddd67a159fcc32378a2dd6870e0dd4e8c1b7c187e7cc99da7c8d2d2a86",
-      "refs": [
-        "std",
-        "syn"
-      ]
-    },
-    "tests": {
-      "hash": "b1627c0552fad3822b7b6450c5ece8d4de9a9777d3e1bcefda7ccbf7fb78cccc",
-      "refs": [
-        "std"
-      ]
+        "serde"
+      ],
+      "visibility": "Private",
+      "doc_hidden": false
     },
     "report": {
       "hash": "5e33b87ff203c71d2df19624c0bc3b9ca771bceedb50a7fceb1e7a70403d7319",
       "refs": [
         "serde_json"
-      ]
+      ],
+      "visibility": "Private",
+      "doc_hidden": false
     },
-    "extractor": {
-      "hash": "9511259da223dbe267b990b1fa3615a6959333ead7fc8f3a2d6aa52eca091a3b",
-      "refs": [
-        "serde",
-        "syn",
-        "std"
-      ]
-    },
-    "func_calls": {
-      "hash": "f491818623f705b54be9056d5161fd50ba4ffebb3cda7d15720e7727c1b0e47f",
-      "refs": [
-        "syn",
-        "std"
-      ]
-    },
-    "visualize_html": {
-      "hash": "1258374c66097453c33126a6932faa032f7500d530d2b139d658e921666be6b0",
+    "builder": {
+      "hash": "595074744890c6da4bd8507fdcdddb889b1098a295af59a117abf8d3af2a8f64",
       "refs": [
         "parse",
-        "std"
-      ]
+        "graph",
+        "anyhow",
+        "root",
+        "cache",
+        "scan",
+        "std",
+        "detect"
+      ],
+      "visibility": "Private",
+      "doc_hidden": false
+    },
+    "match_graph": {
+      "hash": "c2bc2677a56225f34800f5726dd3365319ac7f9f200e7c90bde18a026f344786",
+      "refs": [
+        "std",
+        "match_extractor",
+        "match_usage"
+      ],
+      "visibility": "Private",
+      "doc_hidden": false
     },
     "cache": {
-      "hash": "c3ad98c5c8ecc5b2bea06e4be9427c72b82f0a7db29b135aab34785b0b2eff39",
+      "hash": "f6ddbb98376133a41bd9dd79c049dd69bfa8eb75c901a9303528ad711351f317",
       "refs": [
-        "anyhow",
-        "parse",
         "serde",
-        "rayon",
         "std",
-        "sha2"
-      ]
-    },
-    "macro_extractor": {
-      "hash": "9dfb2294effba1ddc21939a40a0392dfeaaecb80b4bf3ea61a992efc74f5b51f",
-      "refs": [
-        "syn",
-        "std",
-        "serde"
-      ]
-    },
-    "enum_usage": {
-      "hash": "ab1308dbf3addb6474d075a609c88924744704af75c2d3d7843f0539d4a1c3f4",
-      "refs": [
-        "std",
-        "syn"
-      ]
-    },
-    "scan": {
-      "hash": "598c160ab71e79d25470f3c8d8afe294c73a091e754aa72a0f409f8fdc8c7692",
-      "refs": [
+        "sha2",
+        "parse",
         "anyhow",
-        "std",
-        "walkdir",
         "rayon"
-      ]
+      ],
+      "visibility": "Private",
+      "doc_hidden": false
+    },
+    "logging": {
+      "hash": "053db2bd1936935db0b8090a45aa1d6543f49400245f90e2d8c67bffc1c9603b",
+      "refs": [
+        "tracing"
+      ],
+      "visibility": "Private",
+      "doc_hidden": false
     },
     "const_usage": {
       "hash": "42461412c79faa7bac0fca67fe34a7deb3d9d739faaa46f4f5d85e74dcbcd376",
       "refs": [
         "syn",
         "std"
-      ]
+      ],
+      "visibility": "Private",
+      "doc_hidden": false
     },
-    "mod": {
-      "hash": "be29ae2f39143a11bfdbe345130b589d237777941d6a717c74ebc63914deddbc",
+    "func_graph": {
+      "hash": "0f517f4eb5ebd7567c165888e8b2d51a000dcfe5fd55ce3c4babde1ba0ca83ea",
       "refs": [
-        "macro_extractor",
-        "macro_usage",
-        "macro_graph"
-      ]
+        "func_extractor",
+        "std"
+      ],
+      "visibility": "Private",
+      "doc_hidden": false
     },
-    "graph": {
-      "hash": "83fa34e6f10b5bb87d6125f49929e14fde15995048709d643506288eeac2138b",
+    "generic_usage": {
+      "hash": "eb232c816d3b92e171ffc83abe0552c605b3f24e0eb0c189607439e9a51652cb",
       "refs": [
         "std",
-        "petgraph",
-        "parse"
-      ]
+        "syn"
+      ],
+      "visibility": "Private",
+      "doc_hidden": false
     },
-    "logging": {
-      "hash": "053db2bd1936935db0b8090a45aa1d6543f49400245f90e2d8c67bffc1c9603b",
+    "tests": {
+      "hash": "39b6f98112815e1214540b9ba233f13c5a3f56afe62c9f8e166668140261b6af",
       "refs": [
-        "tracing"
-      ]
+        "std"
+      ],
+      "visibility": "Private",
+      "doc_hidden": false
+    },
+    "detect": {
+      "hash": "847edd010bec9e250abd3ca187d8a767cc521f91f36748b90d22606f8159fa51",
+      "refs": [
+        "std",
+        "parse"
+      ],
+      "visibility": "Private",
+      "doc_hidden": false
+    },
+    "trait_extractor": {
+      "hash": "fdab34d1d2e6efcab2a8678f0b67db30b9fd178e225ab6686ceaf1f57c63bbab",
+      "refs": [
+        "std",
+        "syn",
+        "serde"
+      ],
+      "visibility": "Private",
+      "doc_hidden": false
+    },
+    "prelude": {
+      "hash": "1590e2cdf10d4e893bc4207df35eb09446e4b0fc4970fa0e909cc1ae15dfb728",
+      "refs": [
+        "cache",
+        "root",
+        "detect",
+        "fix",
+        "workspace",
+        "config",
+        "scan",
+        "error",
+        "graph",
+        "parse",
+        "builder"
+      ],
+      "visibility": "Private",
+      "doc_hidden": false
+    },
+    "func_calls": {
+      "hash": "f491818623f705b54be9056d5161fd50ba4ffebb3cda7d15720e7727c1b0e47f",
+      "refs": [
+        "std",
+        "syn"
+      ],
+      "visibility": "Private",
+      "doc_hidden": false
+    },
+    "extractor": {
+      "hash": "9511259da223dbe267b990b1fa3615a6959333ead7fc8f3a2d6aa52eca091a3b",
+      "refs": [
+        "std",
+        "serde",
+        "syn"
+      ],
+      "visibility": "Private",
+      "doc_hidden": false
+    },
+    "const_extractor": {
+      "hash": "a1d43d3dfe907b104f2feaedf392a10f8bc2cd3a4eb1e36e3a3c73ac1dff1ce8",
+      "refs": [
+        "std",
+        "serde",
+        "syn"
+      ],
+      "visibility": "Private",
+      "doc_hidden": false
+    },
+    "visualize_html": {
+      "hash": "e567f15c85a75d8f2c533cd2d98aa79cace6dd081cdda18e6a4744fafdf2cce6",
+      "refs": [
+        "std",
+        "parse"
+      ],
+      "visibility": "Private",
+      "doc_hidden": false
+    },
+    "match_extractor": {
+      "hash": "9d96ff246aaafdc759f7e71604f8eceb9993618300da61f61aee4a442922d30a",
+      "refs": [
+        "syn",
+        "serde",
+        "std"
+      ],
+      "visibility": "Private",
+      "doc_hidden": false
+    },
+    "match_usage": {
+      "hash": "b18138ddd67a159fcc32378a2dd6870e0dd4e8c1b7c187e7cc99da7c8d2d2a86",
+      "refs": [
+        "syn",
+        "std"
+      ],
+      "visibility": "Private",
+      "doc_hidden": false
+    },
+    "config": {
+      "hash": "f5e26aaf8e514fc178a2379687cd665fe4f87d5f45ef6da9353af7840106e8ac",
+      "refs": [
+        "serde",
+        "anyhow",
+        "std"
+      ],
+      "visibility": "Private",
+      "doc_hidden": false
+    },
+    "macro_usage": {
+      "hash": "f9314320a1667abd4e16c7cffdb6f91504227a5942bcb47a039670ce8b301b84",
+      "refs": [
+        "syn",
+        "std"
+      ],
+      "visibility": "Private",
+      "doc_hidden": false
+    },
+    "trait_usage": {
+      "hash": "3e1175c465c94c6bcf8d317e4cc4ae273b9cf99de4549d2a7385b3b34f681f01",
+      "refs": [
+        "syn",
+        "std"
+      ],
+      "visibility": "Private",
+      "doc_hidden": false
     },
     "generic_extractor": {
       "hash": "6be379a9f0e7a47aff21ed9ea23addfbf3e7dbfa8f56c6b4b042bff28e1ea686",
@@ -283,60 +397,83 @@
         "std",
         "syn",
         "serde"
-      ]
+      ],
+      "visibility": "Private",
+      "doc_hidden": false
     },
-    "detect": {
-      "hash": "847edd010bec9e250abd3ca187d8a767cc521f91f36748b90d22606f8159fa51",
+    "trait_graph": {
+      "hash": "e3fa9609978d490e85f74aaa75da12980081f2f3a0784c3f30c7ec8bfd574e27",
       "refs": [
-        "ModuleInfo",
-        "HashMap",
-        "HashSet"
-      ]
+        "trait_usage",
+        "std",
+        "trait_extractor"
+      ],
+      "visibility": "Private",
+      "doc_hidden": false
     },
-    "root": {
-      "hash": "86205333ee57344cb937964238b336fc1ca5725ee5602adb9b05aef7e850d67d",
+    "macro_graph": {
+      "hash": "0bbe7d348c290eaf4e71ba17db44c33c3db0fad9f9b3ac3f29856542f2aaef37",
       "refs": [
-        "std"
-      ]
-    },
-    "trait_usage": {
-      "hash": "3e1175c465c94c6bcf8d317e4cc4ae273b9cf99de4549d2a7385b3b34f681f01",
-      "refs": [
-        "syn",
-        "std"
-      ]
+        "macro_usage",
+        "std",
+        "macro_extractor"
+      ],
+      "visibility": "Private",
+      "doc_hidden": false
     },
     "fix": {
-      "hash": "85dac8e8d845c01f42ebd214fdbd9ace2ec9783efb74dd00392b4c1bc0d80fc5",
-      "refs": [
-        "serde",
-        "regex",
-        "anyhow",
-        "std",
-        "parse"
-      ]
-    },
-    "visualize_pixi": {
-      "hash": "f6f730fdc2fa776d54438f2cb9d2d3bf33a7faaa0aca39b3ebf680c938e845c6",
+      "hash": "c2384ae34c17265ecf261507c817cefa52cf4f6847609f6184d926516233c8a1",
       "refs": [
         "parse",
-        "std"
-      ]
-    },
-    "const_extractor": {
-      "hash": "a1d43d3dfe907b104f2feaedf392a10f8bc2cd3a4eb1e36e3a3c73ac1dff1ce8",
-      "refs": [
+        "std",
+        "regex",
         "serde",
-        "std",
-        "syn"
-      ]
+        "anyhow"
+      ],
+      "visibility": "Private",
+      "doc_hidden": false
     },
-    "generic_usage": {
-      "hash": "eb232c816d3b92e171ffc83abe0552c605b3f24e0eb0c189607439e9a51652cb",
+    "parse": {
+      "hash": "b70ad07685d2c0000bce7e6176e3b4058b3a11b478ed49f1f06a68c6d55e29a2",
       "refs": [
+        "rayon",
+        "anyhow",
+        "syn",
+        "std"
+      ],
+      "visibility": "Private",
+      "doc_hidden": false
+    },
+    "graph": {
+      "hash": "17b917b30630bc38c5241f7cea4deab9ad91100e9e1c365e33cd3bb861376878",
+      "refs": [
+        "extractor",
         "std",
-        "syn"
-      ]
+        "usage"
+      ],
+      "visibility": "Private",
+      "doc_hidden": false
+    },
+    "scan": {
+      "hash": "598c160ab71e79d25470f3c8d8afe294c73a091e754aa72a0f409f8fdc8c7692",
+      "refs": [
+        "rayon",
+        "std",
+        "anyhow",
+        "walkdir"
+      ],
+      "visibility": "Private",
+      "doc_hidden": false
+    },
+    "macro_extractor": {
+      "hash": "9dfb2294effba1ddc21939a40a0392dfeaaecb80b4bf3ea61a992efc74f5b51f",
+      "refs": [
+        "syn",
+        "std",
+        "serde"
+      ],
+      "visibility": "Private",
+      "doc_hidden": false
     }
   }
 }
