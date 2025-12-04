@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deadmod - Module Dependency Graph</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            overflow: hidden;
+        }
+        #header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 50px;
+            background: #16213e;
+            border-bottom: 1px solid #0f3460;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            z-index: 1000;
+            gap: 30px;
+        }
+        #header h1 {
+            font-size: 18px;
+            font-weight: 600;
+            color: #e94560;
+        }
+        .stat {
+            font-size: 13px;
+            color: #aaa;
+        }
+        .stat-value {
+            font-weight: bold;
+            margin-left: 5px;
+        }
+        .stat-value.green { color: #90EE90; }
+        .stat-value.red { color: #F08080; }
+        #canvas-container {
+            position: fixed;
+            top: 50px;
+            left: 0;
+            right: 0;
+            bottom: 0;
+        }
+        canvas {
+            display: block;
+        }
+        #tooltip {
+            position: fixed;
+            background: #16213e;
+            border: 1px solid #0f3460;
+            border-radius: 8px;
+            padding: 12px 16px;
+            font-size: 13px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.15s;
+            max-width: 400px;
+            z-index: 2000;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+        #tooltip.visible {
+            opacity: 1;
+        }
+        #tooltip h3 {
+            margin-bottom: 8px;
+            color: #e94560;
+            font-size: 15px;
+        }
+        #tooltip .status {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+        #tooltip .status.reachable {
+            background: rgba(144, 238, 144, 0.2);
+            color: #90EE90;
+        }
+        #tooltip .status.dead {
+            background: rgba(240, 128, 128, 0.2);
+            color: #F08080;
+        }
+        #tooltip .path {
+            color: #888;
+            font-family: 'Consolas', monospace;
+            font-size: 11px;
+            word-break: break-all;
+        }
+        #tooltip .refs {
+            margin-top: 8px;
+            color: #aaa;
+        }
+        #controls {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            z-index: 1000;
+        }
+        #controls button {
+            width: 40px;
+            height: 40px;
+            border: none;
+            border-radius: 8px;
+            background: #16213e;
+            color: #eee;
+            font-size: 18px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        #controls button:hover {
+            background: #0f3460;
+        }
+        #legend {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: #16213e;
+            border: 1px solid #0f3460;
+            border-radius: 8px;
+            padding: 12px 16px;
+            font-size: 12px;
+            z-index: 1000;
+        }
+        #legend h4 {
+            margin-bottom: 8px;
+            color: #e94560;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 4px 0;
+        }
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div id="header">
+        <h1>Deadmod Graph</h1>
+        <span class="stat">Total:<span class="stat-value">15</span></span>
+        <span class="stat">Reachable:<span class="stat-value green">15</span></span>
+        <span class="stat">Dead:<span class="stat-value red">0</span></span>
+    </div>
+
+    <div id="canvas-container">
+        <canvas id="graph"></canvas>
+    </div>
+
+    <div id="tooltip"></div>
+
+    <div id="controls">
+        <button id="zoom-in" title="Zoom In">+</button>
+        <button id="zoom-out" title="Zoom Out">-</button>
+        <button id="reset" title="Reset View">R</button>
+    </div>
+
+    <div id="legend">
+        <h4>Legend</h4>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #90EE90;"></div>
+            <span>Reachable module</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #F08080;"></div>
+            <span>Dead module</span>
+        </div>
+    </div>
+
+    <script>
+    (function() {
+        // Data
+        const nodes = [{ "id": "fix", "label": "fix", "color": "#90EE90", "status": "reachable", "path": "\\\\?\\C:\\deadmod\\deadmod-core\\src\\fix.rs" },
+    { "id": "workspace", "label": "workspace", "color": "#90EE90", "status": "reachable", "path": "\\\\?\\C:\\deadmod\\deadmod-core\\src\\workspace.rs" },
+    { "id": "detect", "label": "detect", "color": "#90EE90", "status": "reachable", "path": "\\\\?\\C:\\deadmod\\deadmod-core\\src\\detect.rs" },
+    { "id": "visualize", "label": "visualize", "color": "#90EE90", "status": "reachable", "path": "\\\\?\\C:\\deadmod\\deadmod-core\\src\\visualize.rs" },
+    { "id": "report", "label": "report", "color": "#90EE90", "status": "reachable", "path": "\\\\?\\C:\\deadmod\\deadmod-core\\src\\report.rs" },
+    { "id": "graph", "label": "graph", "color": "#90EE90", "status": "reachable", "path": "\\\\?\\C:\\deadmod\\deadmod-core\\src\\graph.rs" },
+    { "id": "visualize_html", "label": "visualize_html", "color": "#90EE90", "status": "reachable", "path": "\\\\?\\C:\\deadmod\\deadmod-core\\src\\visualize_html.rs" },
+    { "id": "logging", "label": "logging", "color": "#90EE90", "status": "reachable", "path": "\\\\?\\C:\\deadmod\\deadmod-core\\src\\logging.rs" },
+    { "id": "parse", "label": "parse", "color": "#90EE90", "status": "reachable", "path": "\\\\?\\C:\\deadmod\\deadmod-core\\src\\parse.rs" },
+    { "id": "cache", "label": "cache", "color": "#90EE90", "status": "reachable", "path": "\\\\?\\C:\\deadmod\\deadmod-core\\src\\cache.rs" },
+    { "id": "root", "label": "root", "color": "#90EE90", "status": "reachable", "path": "\\\\?\\C:\\deadmod\\deadmod-core\\src\\root.rs" },
+    { "id": "lib", "label": "lib", "color": "#90EE90", "status": "reachable", "path": "\\\\?\\C:\\deadmod\\deadmod-core\\src\\lib.rs" },
+    { "id": "tests", "label": "tests", "color": "#90EE90", "status": "reachable", "path": "\\\\?\\C:\\deadmod\\deadmod-core\\src\\tests.rs" },
+    { "id": "config", "label": "config", "color": "#90EE90", "status": "reachable", "path": "\\\\?\\C:\\deadmod\\deadmod-core\\src\\config.rs" },
+    { "id": "scan", "label": "scan", "color": "#90EE90", "status": "reachable", "path": "\\\\?\\C:\\deadmod\\deadmod-core\\src\\scan.rs" }];
+        const edges = [{ "from": "workspace", "to": "visualize" },
+    { "from": "workspace", "to": "cache" },
+    { "from": "lib", "to": "report" },
+    { "from": "lib", "to": "detect" },
+    { "from": "lib", "to": "tests" },
+    { "from": "lib", "to": "parse" },
+    { "from": "lib", "to": "config" },
+    { "from": "lib", "to": "logging" },
+    { "from": "lib", "to": "visualize" },
+    { "from": "lib", "to": "cache" },
+    { "from": "lib", "to": "visualize_html" },
+    { "from": "lib", "to": "root" },
+    { "from": "lib", "to": "fix" },
+    { "from": "lib", "to": "scan" },
+    { "from": "lib", "to": "graph" },
+    { "from": "lib", "to": "workspace" }];
+
+        // Canvas setup
+        const canvas = document.getElementById('graph');
+        const ctx = canvas.getContext('2d');
+        const tooltip = document.getElementById('tooltip');
+
+        let width, height;
+        let scale = 1;
+        let offsetX = 0, offsetY = 0;
+        let dragging = false;
+        let dragNode = null;
+        let lastMouse = { x: 0, y: 0 };
+
+        // Node positions and velocities
+        const nodeMap = {};
+        nodes.forEach((n, i) => {
+            const angle = (i / nodes.length) * Math.PI * 2;
+            const radius = Math.min(300, nodes.length * 15);
+            nodeMap[n.id] = {
+                ...n,
+                x: Math.cos(angle) * radius + Math.random() * 50,
+                y: Math.sin(angle) * radius + Math.random() * 50,
+                vx: 0,
+                vy: 0,
+                radius: 30
+            };
+        });
+
+        // Build adjacency for inbound refs
+        const inbound = {};
+        nodes.forEach(n => inbound[n.id] = []);
+        edges.forEach(e => {
+            if (inbound[e.to]) inbound[e.to].push(e.from);
+        });
+
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight - 50;
+            offsetX = width / 2;
+            offsetY = height / 2;
+        }
+
+        function toScreen(x, y) {
+            return {
+                x: x * scale + offsetX,
+                y: y * scale + offsetY
+            };
+        }
+
+        function toWorld(x, y) {
+            return {
+                x: (x - offsetX) / scale,
+                y: (y - offsetY) / scale
+            };
+        }
+
+        function getNodeAt(mx, my) {
+            const world = toWorld(mx, my);
+            for (const id in nodeMap) {
+                const n = nodeMap[id];
+                const dx = world.x - n.x;
+                const dy = world.y - n.y;
+                if (dx * dx + dy * dy < n.radius * n.radius) {
+                    return n;
+                }
+            }
+            return null;
+        }
+
+        // Physics simulation
+        function simulate() {
+            const nodes = Object.values(nodeMap);
+
+            // Repulsion between nodes
+            for (let i = 0; i < nodes.length; i++) {
+                for (let j = i + 1; j < nodes.length; j++) {
+                    const a = nodes[i], b = nodes[j];
+                    let dx = b.x - a.x;
+                    let dy = b.y - a.y;
+                    let dist = Math.sqrt(dx * dx + dy * dy) || 1;
+                    let force = 5000 / (dist * dist);
+                    let fx = (dx / dist) * force;
+                    let fy = (dy / dist) * force;
+                    a.vx -= fx;
+                    a.vy -= fy;
+                    b.vx += fx;
+                    b.vy += fy;
+                }
+            }
+
+            // Attraction along edges
+            edges.forEach(e => {
+                const a = nodeMap[e.from];
+                const b = nodeMap[e.to];
+                if (!a || !b) return;
+                let dx = b.x - a.x;
+                let dy = b.y - a.y;
+                let dist = Math.sqrt(dx * dx + dy * dy) || 1;
+                let force = (dist - 100) * 0.05;
+                let fx = (dx / dist) * force;
+                let fy = (dy / dist) * force;
+                a.vx += fx;
+                a.vy += fy;
+                b.vx -= fx;
+                b.vy -= fy;
+            });
+
+            // Center gravity
+            nodes.forEach(n => {
+                n.vx -= n.x * 0.001;
+                n.vy -= n.y * 0.001;
+            });
+
+            // Apply velocities with damping
+            nodes.forEach(n => {
+                if (n === dragNode) return;
+                n.vx *= 0.9;
+                n.vy *= 0.9;
+                n.x += n.vx;
+                n.y += n.vy;
+            });
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, width, height);
+
+            // Draw edges
+            ctx.strokeStyle = '#444';
+            ctx.lineWidth = 1.5 * scale;
+            edges.forEach(e => {
+                const a = nodeMap[e.from];
+                const b = nodeMap[e.to];
+                if (!a || !b) return;
+                const p1 = toScreen(a.x, a.y);
+                const p2 = toScreen(b.x, b.y);
+
+                // Draw line
+                ctx.beginPath();
+                ctx.moveTo(p1.x, p1.y);
+                ctx.lineTo(p2.x, p2.y);
+                ctx.stroke();
+
+                // Draw arrow
+                const angle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+                const arrowLen = 10 * scale;
+                const nodeRadius = 30 * scale;
+                const dist = Math.sqrt((p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2);
+                const ratio = (dist - nodeRadius) / dist;
+                const ax = p1.x + (p2.x - p1.x) * ratio;
+                const ay = p1.y + (p2.y - p1.y) * ratio;
+
+                ctx.beginPath();
+                ctx.moveTo(ax, ay);
+                ctx.lineTo(ax - arrowLen * Math.cos(angle - 0.4), ay - arrowLen * Math.sin(angle - 0.4));
+                ctx.moveTo(ax, ay);
+                ctx.lineTo(ax - arrowLen * Math.cos(angle + 0.4), ay - arrowLen * Math.sin(angle + 0.4));
+                ctx.stroke();
+            });
+
+            // Draw nodes
+            Object.values(nodeMap).forEach(n => {
+                const p = toScreen(n.x, n.y);
+                const r = n.radius * scale;
+
+                // Node background
+                ctx.fillStyle = n.color;
+                ctx.beginPath();
+                ctx.roundRect(p.x - r, p.y - r/2, r * 2, r, 8 * scale);
+                ctx.fill();
+
+                // Node border
+                ctx.strokeStyle = n.status === 'dead' ? '#c44' : '#4a4';
+                ctx.lineWidth = 2 * scale;
+                ctx.stroke();
+
+                // Node label
+                ctx.fillStyle = '#1a1a2e';
+                ctx.font = `${Math.max(11, 13 * scale)}px 'Segoe UI', sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(n.label, p.x, p.y);
+            });
+        }
+
+        function showTooltip(node, x, y) {
+            const refs = edges.filter(e => e.from === node.id).map(e => e.to);
+            const inRefs = inbound[node.id] || [];
+
+            tooltip.innerHTML = `
+                <h3>${node.label}</h3>
+                <span class="status ${node.status}">${node.status}</span>
+                <div class="path">${node.path}</div>
+                <div class="refs">
+                    <strong>Imports:</strong> ${refs.length ? refs.join(', ') : 'none'}<br>
+                    <strong>Imported by:</strong> ${inRefs.length ? inRefs.join(', ') : 'none'}
+                </div>
+            `;
+
+            // Position tooltip
+            let tx = x + 15;
+            let ty = y + 15;
+            if (tx + 300 > width) tx = x - 315;
+            if (ty + 150 > height) ty = y - 165;
+            tooltip.style.left = tx + 'px';
+            tooltip.style.top = (ty + 50) + 'px';
+            tooltip.classList.add('visible');
+        }
+
+        function hideTooltip() {
+            tooltip.classList.remove('visible');
+        }
+
+        // Event handlers
+        canvas.addEventListener('mousedown', e => {
+            const node = getNodeAt(e.clientX, e.clientY - 50);
+            if (node) {
+                dragNode = node;
+            } else {
+                dragging = true;
+            }
+            lastMouse = { x: e.clientX, y: e.clientY };
+        });
+
+        canvas.addEventListener('mousemove', e => {
+            const mx = e.clientX, my = e.clientY - 50;
+
+            if (dragNode) {
+                const world = toWorld(mx, my);
+                dragNode.x = world.x;
+                dragNode.y = world.y;
+                dragNode.vx = 0;
+                dragNode.vy = 0;
+            } else if (dragging) {
+                offsetX += mx - lastMouse.x;
+                offsetY += my - lastMouse.y;
+            } else {
+                const node = getNodeAt(mx, my);
+                if (node) {
+                    showTooltip(node, mx, my);
+                    canvas.style.cursor = 'pointer';
+                } else {
+                    hideTooltip();
+                    canvas.style.cursor = 'grab';
+                }
+            }
+            lastMouse = { x: mx, y: my + 50 };
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            dragging = false;
+            dragNode = null;
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            dragging = false;
+            dragNode = null;
+            hideTooltip();
+        });
+
+        canvas.addEventListener('wheel', e => {
+            e.preventDefault();
+            const delta = e.deltaY > 0 ? 0.9 : 1.1;
+            const mx = e.clientX, my = e.clientY - 50;
+
+            // Zoom toward mouse position
+            offsetX = mx - (mx - offsetX) * delta;
+            offsetY = my - (my - offsetY) * delta;
+            scale *= delta;
+            scale = Math.max(0.1, Math.min(5, scale));
+        });
+
+        // Control buttons
+        document.getElementById('zoom-in').onclick = () => {
+            scale *= 1.2;
+            scale = Math.min(5, scale);
+        };
+        document.getElementById('zoom-out').onclick = () => {
+            scale *= 0.8;
+            scale = Math.max(0.1, scale);
+        };
+        document.getElementById('reset').onclick = () => {
+            scale = 1;
+            offsetX = width / 2;
+            offsetY = height / 2;
+        };
+
+        // Animation loop
+        function loop() {
+            simulate();
+            draw();
+            requestAnimationFrame(loop);
+        }
+
+        window.addEventListener('resize', resize);
+        resize();
+        loop();
+    })();
+    </script>
+</body>
+</html>

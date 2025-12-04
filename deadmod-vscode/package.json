@@ -1,0 +1,82 @@
+{
+  "name": "deadmod",
+  "displayName": "Deadmod - Rust Dead Module Detector",
+  "description": "Real-time dead module detection for Rust projects",
+  "version": "1.0.0",
+  "publisher": "deadmod",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/anthropics/deadmod"
+  },
+  "engines": {
+    "vscode": "^1.76.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters"
+  ],
+  "keywords": [
+    "rust",
+    "dead code",
+    "modules",
+    "linter",
+    "analyzer"
+  ],
+  "activationEvents": [
+    "onLanguage:rust"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "deadmod.run",
+        "title": "Deadmod: Run Analyzer"
+      },
+      {
+        "command": "deadmod.fix",
+        "title": "Deadmod: Fix Dead Modules"
+      },
+      {
+        "command": "deadmod.openGraph",
+        "title": "Deadmod: Open Graph Viewer"
+      }
+    ],
+    "configuration": {
+      "title": "Deadmod",
+      "properties": {
+        "deadmod.serverPath": {
+          "type": "string",
+          "default": "deadmod-lsp",
+          "description": "Path to the deadmod-lsp executable"
+        },
+        "deadmod.analyzeOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Run analysis automatically when saving Rust files"
+        },
+        "deadmod.showWarnings": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show warnings for dead modules"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "@types/vscode": "^1.76.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.0.0",
+    "typescript": "^5.0.0"
+  }
+}

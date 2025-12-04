@@ -1,0 +1,13 @@
+{
+  "modules": {
+    "main": {
+      "hash": "54eb312adbe4fbda56f213ddc62e433b1f14ae642b7745ada1269a9c44d88616",
+      "refs": [
+        "deadmod_core",
+        "std",
+        "clap",
+        "anyhow"
+      ]
+    }
+  }
+}

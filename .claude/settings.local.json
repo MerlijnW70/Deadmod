@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(md C:deadmodsrc)",
+      "Bash(cargo build:*)",
+      "Bash(C:deadmodtargetreleasedeadmod.exe --help)",
+      "Bash(cargo run:*)",
+      "Bash(cargo test:*)",
+      "Bash(cargo clippy:*)",
+      "Bash(for i in 1 2 3 4 5)",
+      "Bash(do echo \"=== Run $i ===\")",
+      "Bash(done)",
+      "Bash(C:deadmodtargetreleasedeadmod.exe .)",
+      "Bash(C:/deadmod/target/release/deadmod.exe C:/deadmod/deadmod-core)",
+      "Bash(C:/deadmod/target/release/deadmod.exe C:/deadmod/deadmod-core --dot)",
+      "Bash(C:/deadmod/target/release/deadmod.exe C:/deadmod --workspace)",
+      "Bash(C:/deadmod/target/release/deadmod.exe:*)",
+      "Bash(./target/release/deadmod.exe:*)",
+      "Bash($env:RUST_LOG=\"info\")",
+      "Bash(RUST_LOG=info ./target/release/deadmod.exe:*)",
+      "Bash(time ./target/release/deadmod.exe:*)",
+      "Bash(cat:*)",
+      "Bash(wc:*)",
+      "Bash(find:*)",
+      "Bash(do)",
+      "Bash(echo:*)",
+      "Bash(git init:*)",
+      "Bash(git remote add:*)",
+      "Bash(git add:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

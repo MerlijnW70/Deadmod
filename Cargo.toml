@@ -1,0 +1,8 @@
+[workspace]
+members = [
+    "deadmod-core",
+    "deadmod-cli",
+    "deadmod-lsp",
+]
+
+resolver = "2"
