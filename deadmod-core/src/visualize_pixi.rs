@@ -29,6 +29,14 @@ pub fn generate_pixi_graph(mods: &HashMap<String, ModuleInfo>, reachable: &HashS
     let mut edges = Vec::with_capacity(edge_count);
     let mut clusters: HashSet<String> = HashSet::new();
 
+    // Build inbound reference counts
+    let mut inbound_counts: HashMap<String, usize> = HashMap::new();
+    for info in mods.values() {
+        for ref_name in &info.refs {
+            *inbound_counts.entry(ref_name.clone()).or_insert(0) += 1;
+        }
+    }
+
     for (name, info) in mods {
         let status = if reachable.contains(name) { "reachable" } else { "dead" };
         let cluster = extract_parent_module(&info.path.display().to_string());
@@ -36,9 +44,14 @@ pub fn generate_pixi_graph(mods: &HashMap<String, ModuleInfo>, reachable: &HashS
 
         let path_escaped = info.path.display().to_string().replace('\\', "\\\\").replace('"', "\\\"");
 
+        // Module metadata
+        let ref_count = info.refs.len();
+        let inbound_count = inbound_counts.get(name).copied().unwrap_or(0);
+        let visibility = format!("{:?}", info.visibility).to_lowercase();
+
         nodes.push(format!(
-            r#"{{ "id": "{}", "label": "{}", "status": "{}", "path": "{}", "cluster": "{}" }}"#,
-            name, name, status, path_escaped, cluster
+            r#"{{ "id": "{}", "label": "{}", "status": "{}", "path": "{}", "cluster": "{}", "refCount": {}, "inboundCount": {}, "visibility": "{}" }}"#,
+            name, name, status, path_escaped, cluster, ref_count, inbound_count, visibility
         ));
     }
 
@@ -233,6 +246,44 @@ pub fn generate_pixi_graph(mods: &HashMap<String, ModuleInfo>, reachable: &HashS
         }}
         #inspector .dep-item:hover {{ background: rgba(233, 69, 96, 0.2); }}
         #inspector .dep-item.dead {{ color: #F08080; }}
+        /* Action Buttons */
+        #inspector .actions {{ display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }}
+        #inspector .action-btn {{
+            display: flex; align-items: center; gap: 8px;
+            padding: 10px 14px;
+            background: rgba(233, 69, 96, 0.15);
+            border: 1px solid rgba(233, 69, 96, 0.3);
+            border-radius: 6px;
+            color: #e94560;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }}
+        #inspector .action-btn:hover {{ background: rgba(233, 69, 96, 0.25); border-color: rgba(233, 69, 96, 0.5); }}
+        #inspector .action-btn.success {{ background: rgba(144, 238, 144, 0.15); border-color: rgba(144, 238, 144, 0.3); color: #90EE90; }}
+        #inspector .action-btn.danger {{ background: rgba(240, 128, 128, 0.15); border-color: rgba(240, 128, 128, 0.3); color: #F08080; }}
+        #inspector .cmd-box {{
+            background: #0d1117; border: 1px solid #30363d; border-radius: 6px;
+            padding: 10px; margin-top: 8px; font-family: 'Consolas', monospace;
+            font-size: 11px; color: #c9d1d9; word-break: break-all; position: relative;
+        }}
+        #inspector .cmd-box .copy-btn {{
+            position: absolute; top: 6px; right: 6px; padding: 4px 8px;
+            background: #21262d; border: 1px solid #30363d; border-radius: 4px;
+            color: #8b949e; font-size: 10px; cursor: pointer;
+        }}
+        #inspector .cmd-box .copy-btn:hover {{ background: #30363d; color: #c9d1d9; }}
+        #inspector .badge {{ display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: bold; text-transform: uppercase; margin-left: 5px; }}
+        #inspector .badge.pub {{ background: rgba(144, 238, 144, 0.2); color: #90EE90; }}
+        #inspector .badge.priv {{ background: rgba(100, 100, 100, 0.2); color: #888; }}
+        /* Toast */
+        #toast {{
+            position: fixed; bottom: 80px; right: 340px; background: #16213e;
+            border: 1px solid #0f3460; border-radius: 8px; padding: 12px 20px;
+            color: #90EE90; font-size: 13px; opacity: 0; transform: translateY(20px);
+            transition: all 0.3s; z-index: 3000;
+        }}
+        #toast.visible {{ opacity: 1; transform: translateY(0); }}
         #fps {{
             position: fixed;
             top: 60px;
@@ -267,7 +318,9 @@ pub fn generate_pixi_graph(mods: &HashMap<String, ModuleInfo>, reachable: &HashS
         <button id="toggle-bundling" title="Edge Bundling" class="active">B</button>
         <button id="toggle-clusters" title="Cluster Gravity" class="active">C</button>
         <button id="toggle-sim" title="Pause Simulation">⏸</button>
+        <button id="clear-highlight" title="Clear Highlight (Esc)">✕</button>
     </div>
+    <div id="toast"></div>
 
     <div id="legend">
         <h4>Legend</h4>
@@ -332,6 +385,7 @@ pub fn generate_pixi_graph(mods: &HashMap<String, ModuleInfo>, reachable: &HashS
         const nodeMap = {{}};
         const nodeSprites = {{}};
         let selectedNode = null;
+        let highlightedNodes = new Set();
 
         // Initialize nodes
         nodes.forEach((n, i) => {{
@@ -466,8 +520,15 @@ pub fn generate_pixi_graph(mods: &HashMap<String, ModuleInfo>, reachable: &HashS
                 const a = nodeMap[e.from], b = nodeMap[e.to];
                 if (!a || !b) return;
 
+                // Highlighting logic for edges
+                const edgeHighlighted = highlightedNodes.size === 0 ||
+                    (highlightedNodes.has(e.from) && highlightedNodes.has(e.to));
+
                 const isDead = a.status === 'dead' || b.status === 'dead';
-                edgeGraphics.lineStyle(1.5, isDead ? 0xF08080 : 0x555555, isDead ? 0.4 : 0.5);
+                const alpha = edgeHighlighted ? (isDead ? 0.4 : 0.5) : 0.05;
+                const color = edgeHighlighted && highlightedNodes.size > 0 ? 0xf7be16 : (isDead ? 0xF08080 : 0x555555);
+                const lineWidth = edgeHighlighted && highlightedNodes.size > 0 ? 2.5 : 1.5;
+                edgeGraphics.lineStyle(lineWidth, color, alpha);
 
                 if (edgeBundling) {{
                     const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
@@ -507,12 +568,18 @@ pub fn generate_pixi_graph(mods: &HashMap<String, ModuleInfo>, reachable: &HashS
                     sprite.x = n.x;
                     sprite.y = n.y;
 
+                    // Highlighting logic
+                    const isHighlighted = highlightedNodes.size === 0 || highlightedNodes.has(id);
+
                     // Selection highlight
                     if (selectedNode && selectedNode.id === id) {{
                         sprite.alpha = 1;
-                        sprite.scale.set(1.1);
+                        sprite.scale.set(1.15);
+                    }} else if (highlightedNodes.has(id) && highlightedNodes.size > 0) {{
+                        sprite.alpha = 1;
+                        sprite.scale.set(1.05);
                     }} else {{
-                        sprite.alpha = 0.95;
+                        sprite.alpha = isHighlighted ? 0.95 : 0.2;
                         sprite.scale.set(1);
                     }}
                 }}
@@ -533,7 +600,10 @@ pub fn generate_pixi_graph(mods: &HashMap<String, ModuleInfo>, reachable: &HashS
             document.getElementById('inspector-content').innerHTML = `
                 <div class="section">
                     <h3>Module</h3>
-                    <div class="value">${{node.label}}</div>
+                    <div class="value">
+                        ${{node.label}}
+                        <span class="badge ${{node.visibility === 'public' ? 'pub' : 'priv'}}">${{node.visibility || 'private'}}</span>
+                    </div>
                     <span class="cluster-tag">${{node.cluster}}</span>
                 </div>
                 <div class="section">
@@ -561,7 +631,29 @@ pub fn generate_pixi_graph(mods: &HashMap<String, ModuleInfo>, reachable: &HashS
                 </div>
                 <div class="section">
                     <h3>Path</h3>
-                    <div class="value" style="font-size: 10px; word-break: break-all; color: #666;">${{node.path}}</div>
+                    <div class="cmd-box">
+                        ${{node.path}}
+                        <button class="copy-btn" onclick="window.copyToClipboard('${{node.path.replace(/\\/g, '\\\\\\\\')}}')">Copy</button>
+                    </div>
+                </div>
+                <div class="section">
+                    <h3>Actions</h3>
+                    <div class="actions">
+                        <button class="action-btn" onclick="window.copyToClipboard('${{node.path.replace(/\\/g, '\\\\\\\\')}}')">
+                            <span class="icon">📋</span> Copy Path
+                        </button>
+                        <button class="action-btn" onclick="window.copyDeadmodCommand('${{node.id}}')">
+                            <span class="icon">⚡</span> Copy Deadmod Command
+                        </button>
+                        <button class="action-btn success" onclick="window.highlightConnections('${{node.id}}')">
+                            <span class="icon">🔍</span> Highlight Connections
+                        </button>
+                        ${{node.status === 'dead' ? `
+                        <button class="action-btn danger" onclick="window.showRemoveCommand('${{node.path.replace(/\\/g, '\\\\\\\\')}}')">
+                            <span class="icon">🗑️</span> Show Remove Command
+                        </button>
+                        ` : ''}}
+                    </div>
                 </div>
             `;
 
@@ -570,6 +662,59 @@ pub fn generate_pixi_graph(mods: &HashMap<String, ModuleInfo>, reachable: &HashS
             worldContainer.y = app.screen.height / 2 - node.y * worldContainer.scale.y;
         }}
         window.selectNode = selectNode;
+
+        // Toast notification
+        let toastTimeout = null;
+        function showToast(message, type = 'success') {{
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.style.color = type === 'success' ? '#90EE90' : '#F08080';
+            toast.classList.add('visible');
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => toast.classList.remove('visible'), 2000);
+        }}
+
+        // Copy to clipboard
+        window.copyToClipboard = function(text) {{
+            navigator.clipboard.writeText(text).then(() => {{
+                showToast('Copied to clipboard!');
+            }}).catch(() => showToast('Failed to copy', 'error'));
+        }};
+
+        // Copy deadmod command
+        window.copyDeadmodCommand = function(moduleId) {{
+            const node = nodeMap[moduleId];
+            if (!node) return;
+            const pathParts = node.path.replace(/\\\\/g, '/').split('/');
+            let cratePath = pathParts.slice(0, pathParts.indexOf('src')).join('/');
+            if (!cratePath) cratePath = '.';
+            navigator.clipboard.writeText(`deadmod "${{cratePath}}"`).then(() => {{
+                showToast('Command copied!');
+            }}).catch(() => showToast('Failed to copy', 'error'));
+        }};
+
+        // Highlight connections
+        window.highlightConnections = function(moduleId) {{
+            highlightedNodes.clear();
+            highlightedNodes.add(moduleId);
+            (outbound[moduleId] || []).forEach(d => highlightedNodes.add(d));
+            (inbound[moduleId] || []).forEach(d => highlightedNodes.add(d));
+            showToast(`Highlighted ${{highlightedNodes.size}} connected modules`);
+        }};
+
+        // Clear highlights
+        window.clearHighlights = function() {{
+            highlightedNodes.clear();
+            document.getElementById('clear-highlight').classList.remove('active');
+        }};
+
+        // Show remove command
+        window.showRemoveCommand = function(path) {{
+            const cmd = `# Remove dead module:\\nrm "${{path}}"\\n# Also remove any 'mod modulename;' declarations referencing it`;
+            navigator.clipboard.writeText(cmd.replace(/\\\\n/g, '\\n')).then(() => {{
+                showToast('Remove command copied!');
+            }}).catch(() => showToast('Failed to copy', 'error'));
+        }};
 
         // Pan/Zoom
         let dragging = false, lastX = 0, lastY = 0;
@@ -625,6 +770,14 @@ pub fn generate_pixi_graph(mods: &HashMap<String, ModuleInfo>, reachable: &HashS
             simRunning = !simRunning;
             simBtn.textContent = simRunning ? '⏸' : '▶';
         }};
+
+        // Clear highlight button
+        document.getElementById('clear-highlight').onclick = window.clearHighlights;
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', e => {{
+            if (e.key === 'Escape') window.clearHighlights();
+        }});
 
         // FPS counter
         let frameCount = 0, lastTime = performance.now();

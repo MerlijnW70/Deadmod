@@ -42,6 +42,14 @@ pub fn generate_html_graph(mods: &HashMap<String, ModuleInfo>, reachable: &HashS
     // Collect unique parent modules for clustering
     let mut clusters: HashSet<String> = HashSet::new();
 
+    // Build inbound reference counts
+    let mut inbound_counts: HashMap<String, usize> = HashMap::new();
+    for info in mods.values() {
+        for ref_name in &info.refs {
+            *inbound_counts.entry(ref_name.clone()).or_insert(0) += 1;
+        }
+    }
+
     // Build nodes JSON with pre-allocated string
     for (name, info) in mods {
         let color = if reachable.contains(name) {
@@ -63,9 +71,14 @@ pub fn generate_html_graph(mods: &HashMap<String, ModuleInfo>, reachable: &HashS
         // Escape for JSON
         let path_escaped = info.path.display().to_string().replace('\\', "\\\\").replace('"', "\\\"");
 
+        // Module metadata
+        let ref_count = info.refs.len();
+        let inbound_count = inbound_counts.get(name).copied().unwrap_or(0);
+        let visibility = format!("{:?}", info.visibility).to_lowercase();
+
         nodes.push(format!(
-            r#"{{ "id": "{}", "label": "{}", "color": "{}", "status": "{}", "path": "{}", "cluster": "{}" }}"#,
-            name, name, color, status, path_escaped, cluster
+            r#"{{ "id": "{}", "label": "{}", "color": "{}", "status": "{}", "path": "{}", "cluster": "{}", "refCount": {}, "inboundCount": {}, "visibility": "{}" }}"#,
+            name, name, color, status, path_escaped, cluster, ref_count, inbound_count, visibility
         ));
     }
 
@@ -351,6 +364,108 @@ pub fn generate_html_graph(mods: &HashMap<String, ModuleInfo>, reachable: &HashS
         #inspector .dep-item.dead {{
             color: #F08080;
         }}
+        /* Action Buttons */
+        #inspector .actions {{
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 10px;
+        }}
+        #inspector .action-btn {{
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 14px;
+            background: rgba(233, 69, 96, 0.15);
+            border: 1px solid rgba(233, 69, 96, 0.3);
+            border-radius: 6px;
+            color: #e94560;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }}
+        #inspector .action-btn:hover {{
+            background: rgba(233, 69, 96, 0.25);
+            border-color: rgba(233, 69, 96, 0.5);
+        }}
+        #inspector .action-btn.success {{
+            background: rgba(144, 238, 144, 0.15);
+            border-color: rgba(144, 238, 144, 0.3);
+            color: #90EE90;
+        }}
+        #inspector .action-btn.danger {{
+            background: rgba(240, 128, 128, 0.15);
+            border-color: rgba(240, 128, 128, 0.3);
+            color: #F08080;
+        }}
+        #inspector .action-btn .icon {{
+            font-size: 14px;
+        }}
+        #inspector .cmd-box {{
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 10px;
+            margin-top: 8px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 11px;
+            color: #c9d1d9;
+            word-break: break-all;
+            position: relative;
+        }}
+        #inspector .cmd-box .copy-btn {{
+            position: absolute;
+            top: 6px;
+            right: 6px;
+            padding: 4px 8px;
+            background: #21262d;
+            border: 1px solid #30363d;
+            border-radius: 4px;
+            color: #8b949e;
+            font-size: 10px;
+            cursor: pointer;
+        }}
+        #inspector .cmd-box .copy-btn:hover {{
+            background: #30363d;
+            color: #c9d1d9;
+        }}
+        #inspector .badge {{
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-left: 5px;
+        }}
+        #inspector .badge.pub {{
+            background: rgba(144, 238, 144, 0.2);
+            color: #90EE90;
+        }}
+        #inspector .badge.priv {{
+            background: rgba(100, 100, 100, 0.2);
+            color: #888;
+        }}
+        /* Toast notification */
+        #toast {{
+            position: fixed;
+            bottom: 80px;
+            right: 320px;
+            background: #16213e;
+            border: 1px solid #0f3460;
+            border-radius: 8px;
+            padding: 12px 20px;
+            color: #90EE90;
+            font-size: 13px;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.3s;
+            z-index: 3000;
+        }}
+        #toast.visible {{
+            opacity: 1;
+            transform: translateY(0);
+        }}
     </style>
 </head>
 <body>
@@ -374,6 +489,7 @@ pub fn generate_html_graph(mods: &HashMap<String, ModuleInfo>, reachable: &HashS
         <button id="reset" title="Reset View">R</button>
         <button id="toggle-bundling" title="Toggle Edge Bundling">B</button>
         <button id="toggle-clusters" title="Toggle Cluster Gravity">C</button>
+        <button id="clear-highlight" title="Clear Highlight (Esc)">✕</button>
     </div>
 
     <div id="legend">
@@ -647,11 +763,21 @@ pub fn generate_html_graph(mods: &HashMap<String, ModuleInfo>, reachable: &HashS
                 const p1 = toScreen(a.x, a.y);
                 const p2 = toScreen(b.x, b.y);
 
-                // Edge color based on dead status
-                if (a.status === 'dead' || b.status === 'dead') {{
+                // Dim edges not connected to highlighted nodes
+                const edgeHighlighted = highlightedNodes.size === 0 ||
+                    (highlightedNodes.has(e.from) && highlightedNodes.has(e.to));
+                ctx.globalAlpha = edgeHighlighted ? 1 : 0.1;
+
+                // Edge color based on dead status or highlight
+                if (edgeHighlighted && highlightedNodes.size > 0) {{
+                    ctx.strokeStyle = 'rgba(247, 190, 22, 0.8)';
+                    ctx.lineWidth = 2.5 * scale;
+                }} else if (a.status === 'dead' || b.status === 'dead') {{
                     ctx.strokeStyle = 'rgba(240, 128, 128, 0.4)';
+                    ctx.lineWidth = 1.5 * scale;
                 }} else {{
                     ctx.strokeStyle = 'rgba(100, 100, 100, 0.6)';
+                    ctx.lineWidth = 1.5 * scale;
                 }}
 
                 const cp = getBundleControlPoint(a, b);
@@ -684,6 +810,7 @@ pub fn generate_html_graph(mods: &HashMap<String, ModuleInfo>, reachable: &HashS
                 ctx.moveTo(ax, ay);
                 ctx.lineTo(ax - arrowLen * Math.cos(angle + 0.4), ay - arrowLen * Math.sin(angle + 0.4));
                 ctx.stroke();
+                ctx.globalAlpha = 1;
             }});
 
             // Draw nodes
@@ -691,21 +818,29 @@ pub fn generate_html_graph(mods: &HashMap<String, ModuleInfo>, reachable: &HashS
                 const p = toScreen(n.x, n.y);
                 const r = n.radius * scale;
 
+                // Dim non-highlighted nodes when highlighting is active
+                const isHighlighted = highlightedNodes.size === 0 || highlightedNodes.has(n.id);
+                ctx.globalAlpha = isHighlighted ? 1 : 0.2;
+
                 // Node background
                 ctx.fillStyle = n.color;
                 ctx.beginPath();
                 ctx.roundRect(p.x - r, p.y - r/2, r * 2, r, 8 * scale);
                 ctx.fill();
 
-                // Node border (highlight if selected)
+                // Node border (highlight if selected or in highlighted set)
                 if (n === selectedNode) {{
                     ctx.strokeStyle = '#fff';
+                    ctx.lineWidth = 3 * scale;
+                }} else if (highlightedNodes.has(n.id) && highlightedNodes.size > 0) {{
+                    ctx.strokeStyle = '#f7be16';
                     ctx.lineWidth = 3 * scale;
                 }} else {{
                     ctx.strokeStyle = n.status === 'dead' ? '#c44' : '#4a4';
                     ctx.lineWidth = 2 * scale;
                 }}
                 ctx.stroke();
+                ctx.globalAlpha = 1;
 
                 // Cluster indicator dot
                 if (clusterGravity && clusterColorMap[n.cluster]) {{
@@ -774,7 +909,10 @@ pub fn generate_html_graph(mods: &HashMap<String, ModuleInfo>, reachable: &HashS
             inspector.innerHTML = `
                 <div class="section">
                     <h3>Module</h3>
-                    <div class="value">${{node.label}}</div>
+                    <div class="value">
+                        ${{node.label}}
+                        <span class="badge ${{node.visibility === 'public' ? 'pub' : 'priv'}}">${{node.visibility || 'private'}}</span>
+                    </div>
                     <span class="cluster-tag">${{node.cluster}}</span>
                 </div>
 
@@ -825,7 +963,30 @@ pub fn generate_html_graph(mods: &HashMap<String, ModuleInfo>, reachable: &HashS
 
                 <div class="section">
                     <h3>Path</h3>
-                    <div class="value" style="font-size: 11px; word-break: break-all; color: #888;">${{node.path}}</div>
+                    <div class="cmd-box">
+                        ${{node.path}}
+                        <button class="copy-btn" onclick="window.copyToClipboard('${{node.path.replace(/\\/g, '\\\\\\\\')}}')">Copy</button>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h3>Actions</h3>
+                    <div class="actions">
+                        <button class="action-btn" onclick="window.copyToClipboard('${{node.path.replace(/\\/g, '\\\\\\\\')}}')">
+                            <span class="icon">📋</span> Copy Path
+                        </button>
+                        <button class="action-btn" onclick="window.copyDeadmodCommand('${{node.id}}')">
+                            <span class="icon">⚡</span> Copy Deadmod Command
+                        </button>
+                        <button class="action-btn success" onclick="window.highlightConnections('${{node.id}}')">
+                            <span class="icon">🔍</span> Highlight Connections
+                        </button>
+                        ${{node.status === 'dead' ? `
+                        <button class="action-btn danger" onclick="window.showRemoveCommand('${{node.path.replace(/\\/g, '\\\\\\\\')}}')">
+                            <span class="icon">🗑️</span> Show Remove Command
+                        </button>
+                        ` : ''}}
+                    </div>
                 </div>
             `;
         }}
@@ -840,6 +1001,71 @@ pub fn generate_html_graph(mods: &HashMap<String, ModuleInfo>, reachable: &HashS
                 offsetX = width/2 - node.x * scale;
                 offsetY = height/2 - node.y * scale;
             }}
+        }};
+
+        // Toast notification
+        let toastTimeout = null;
+        function showToast(message, type = 'success') {{
+            let toast = document.getElementById('toast');
+            if (!toast) {{
+                toast = document.createElement('div');
+                toast.id = 'toast';
+                document.body.appendChild(toast);
+            }}
+            toast.textContent = message;
+            toast.style.color = type === 'success' ? '#90EE90' : '#F08080';
+            toast.classList.add('visible');
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => toast.classList.remove('visible'), 2000);
+        }}
+
+        // Copy to clipboard
+        window.copyToClipboard = function(text) {{
+            navigator.clipboard.writeText(text).then(() => {{
+                showToast('Copied to clipboard!');
+            }}).catch(() => {{
+                showToast('Failed to copy', 'error');
+            }});
+        }};
+
+        // Copy deadmod command for this module
+        window.copyDeadmodCommand = function(moduleId) {{
+            const node = nodeMap[moduleId];
+            if (!node) return;
+            // Extract parent path from module path
+            const pathParts = node.path.replace(/\\\\/g, '/').split('/');
+            let cratePath = pathParts.slice(0, pathParts.indexOf('src')).join('/');
+            if (!cratePath) cratePath = '.';
+            const cmd = `deadmod "${{cratePath}}"`;
+            navigator.clipboard.writeText(cmd).then(() => {{
+                showToast('Command copied!');
+            }}).catch(() => {{
+                showToast('Failed to copy', 'error');
+            }});
+        }};
+
+        // Highlight connections tracking
+        let highlightedNodes = new Set();
+
+        // Highlight connected nodes
+        window.highlightConnections = function(moduleId) {{
+            const deps = outbound[moduleId] || [];
+            const dependents = inbound[moduleId] || [];
+            highlightedNodes.clear();
+            highlightedNodes.add(moduleId);
+            deps.forEach(d => highlightedNodes.add(d));
+            dependents.forEach(d => highlightedNodes.add(d));
+            showToast(`Highlighted ${{highlightedNodes.size}} connected modules`);
+        }};
+
+        // Show remove command for dead module
+        window.showRemoveCommand = function(path) {{
+            const cmd = `# Remove dead module:\\nrm "${{path}}"\\n# Also remove any 'mod modulename;' declarations referencing it`;
+            navigator.clipboard.writeText(cmd.replace(/\\\\n/g, '\\n')).then(() => {{
+                showToast('Remove command copied!');
+            }}).catch(() => {{
+                showToast('Failed to copy', 'error');
+            }});
         }};
 
         // Event handlers
@@ -941,6 +1167,21 @@ pub fn generate_html_graph(mods: &HashMap<String, ModuleInfo>, reachable: &HashS
             clusterBtn.classList.toggle('active', clusterGravity);
         }};
         clusterBtn.classList.toggle('active', clusterGravity);
+
+        // Clear highlights
+        const clearBtn = document.getElementById('clear-highlight');
+        window.clearHighlights = function() {{
+            highlightedNodes.clear();
+            clearBtn.classList.remove('active');
+        }};
+        clearBtn.onclick = window.clearHighlights;
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', e => {{
+            if (e.key === 'Escape') {{
+                window.clearHighlights();
+            }}
+        }});
 
         // Animation loop
         function loop() {{
