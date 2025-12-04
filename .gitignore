@@ -24,6 +24,11 @@ Thumbs.db
 **/.deadmod/
 nul
 
-# Generated HTML
+# Generated files
 test_graph.html
 *.html
+*.dot
+graph.json
+
+# Claude settings
+.claude/
