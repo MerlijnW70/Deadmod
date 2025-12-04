@@ -392,15 +392,19 @@ mod discovery_tests {
         //   core/
         //     mod.rs
         //     engine.rs
-        fs::create_dir_all(dir.join("src/api")).unwrap();
-        fs::create_dir_all(dir.join("src/core")).unwrap();
+        let src = dir.join("src");
+        let api = src.join("api");
+        let core = src.join("core");
 
-        fs::write(dir.join("src/lib.rs"), "mod api;\nmod core;").unwrap();
-        fs::write(dir.join("src/api/mod.rs"), "mod routes;\nmod handlers;").unwrap();
-        fs::write(dir.join("src/api/routes.rs"), "pub fn get() {}").unwrap();
-        fs::write(dir.join("src/api/handlers.rs"), "pub fn handle() {}").unwrap();
-        fs::write(dir.join("src/core/mod.rs"), "mod engine;").unwrap();
-        fs::write(dir.join("src/core/engine.rs"), "pub fn run() {}").unwrap();
+        fs::create_dir_all(&api).unwrap();
+        fs::create_dir_all(&core).unwrap();
+
+        fs::write(src.join("lib.rs"), "mod api;\nmod core;").unwrap();
+        fs::write(api.join("mod.rs"), "mod routes;\nmod handlers;").unwrap();
+        fs::write(api.join("routes.rs"), "pub fn get() {}").unwrap();
+        fs::write(api.join("handlers.rs"), "pub fn handle() {}").unwrap();
+        fs::write(core.join("mod.rs"), "mod engine;").unwrap();
+        fs::write(core.join("engine.rs"), "pub fn run() {}").unwrap();
 
         dir
     }
