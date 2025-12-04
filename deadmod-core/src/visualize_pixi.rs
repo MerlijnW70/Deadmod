@@ -44,14 +44,38 @@ pub fn generate_pixi_graph(mods: &HashMap<String, ModuleInfo>, reachable: &HashS
     for (name, info) in mods {
         let status = if reachable.contains(name) { "reachable" } else { "dead" };
         let path_str = info.path.display().to_string();
-        let cluster = extract_parent_module(&path_str);
-        let top_cluster = extract_top_cluster(&path_str);
+
+        // For workspace mode: extract crate name from module name (e.g., "deadmod-core::lib")
+        // For single crate: use path-based extraction
+        let (cluster, top_cluster) = if name.contains("::") {
+            // Workspace mode: module name has crate prefix
+            let parts: Vec<&str> = name.split("::").collect();
+            let crate_name = parts[0].to_string();
+            // Full cluster path includes crate name
+            let full_cluster = if parts.len() > 2 {
+                format!("{}::{}", crate_name, parts[1])
+            } else {
+                crate_name.clone()
+            };
+            (full_cluster, crate_name)
+        } else {
+            // Single crate mode: use path-based extraction
+            (extract_parent_module(&path_str), extract_top_cluster(&path_str))
+        };
+
         clusters.insert(cluster.clone());
         top_clusters.insert(top_cluster.clone());
 
         // Strip Windows extended-length path prefix
         let path_clean = path_str.strip_prefix(r"\\?\").unwrap_or(&path_str);
         let path_escaped = path_clean.replace('\\', "\\\\").replace('"', "\\\"");
+
+        // Short label for display (without crate prefix if present)
+        let label = if name.contains("::") {
+            name.split("::").last().unwrap_or(name).to_string()
+        } else {
+            name.clone()
+        };
 
         // Module metadata
         let ref_count = info.refs.len();
@@ -61,7 +85,7 @@ pub fn generate_pixi_graph(mods: &HashMap<String, ModuleInfo>, reachable: &HashS
         // Include topCluster for hierarchical visualization
         nodes.push(format!(
             r#"{{ "id": "{}", "label": "{}", "status": "{}", "path": "{}", "cluster": "{}", "topCluster": "{}", "refCount": {}, "inboundCount": {}, "visibility": "{}" }}"#,
-            name, name, status, path_escaped, cluster, top_cluster, ref_count, inbound_count, visibility
+            name, label, status, path_escaped, cluster, top_cluster, ref_count, inbound_count, visibility
         ));
     }
 
