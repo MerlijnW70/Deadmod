@@ -21,4 +21,9 @@ Thumbs.db
 
 # Cache
 .deadmod-cache.json
+**/.deadmod/
 nul
+
+# Generated HTML
+test_graph.html
+*.html
