@@ -14,10 +14,57 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
-use syn::{File, Item, ItemMod, UsePath, UseTree};
+use syn::{File, Item, ItemMod, UsePath, UseTree, Visibility as SynVisibility};
 
 /// Rust path keywords that should not be treated as module dependencies.
 const PATH_KEYWORDS: &[&str] = &["self", "super", "crate"];
+
+/// Visibility level of a module or item.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Visibility {
+    /// Private (default) - `mod foo;`
+    #[default]
+    Private,
+    /// Public - `pub mod foo;`
+    Public,
+    /// Crate-visible - `pub(crate) mod foo;`
+    PubCrate,
+    /// Super-visible - `pub(super) mod foo;`
+    PubSuper,
+    /// Visible to a specific path - `pub(in path) mod foo;`
+    PubIn,
+}
+
+impl Visibility {
+    /// Check if this visibility could expose the item externally.
+    pub fn is_potentially_external(&self) -> bool {
+        matches!(self, Self::Public)
+    }
+
+    /// Check if this visibility is restricted to the crate.
+    pub fn is_crate_internal(&self) -> bool {
+        matches!(self, Self::Private | Self::PubCrate | Self::PubSuper | Self::PubIn)
+    }
+}
+
+impl From<&SynVisibility> for Visibility {
+    fn from(vis: &SynVisibility) -> Self {
+        match vis {
+            SynVisibility::Public(_) => Self::Public,
+            SynVisibility::Restricted(r) => {
+                let path = r.path.segments.first()
+                    .map(|s| s.ident.to_string())
+                    .unwrap_or_default();
+                match path.as_str() {
+                    "crate" => Self::PubCrate,
+                    "super" => Self::PubSuper,
+                    _ => Self::PubIn,
+                }
+            }
+            SynVisibility::Inherited => Self::Private,
+        }
+    }
+}
 
 /// Normalize a path string to use forward slashes consistently.
 ///
@@ -38,10 +85,20 @@ pub fn path_to_normalized_string(path: &Path) -> String {
 /// Stores metadata for a single module file.
 #[derive(Debug, Clone)]
 pub struct ModuleInfo {
-    #[allow(dead_code)]
-    pub path: PathBuf, // Retained for future path-based reporting
+    /// Path to the module file
+    pub path: PathBuf,
+    /// Module name (file stem)
     pub name: String,
+    /// Referenced modules (dependencies)
     pub refs: HashSet<String>,
+    /// Module's own visibility (if declared via `mod` statement)
+    pub visibility: Visibility,
+    /// Whether this module has `#[doc(hidden)]`
+    pub doc_hidden: bool,
+    /// Module declarations with their visibility (child modules)
+    pub mod_decls: HashMap<String, Visibility>,
+    /// Re-exports from this module (`pub use`)
+    pub reexports: HashSet<String>,
 }
 
 impl ModuleInfo {
@@ -57,7 +114,16 @@ impl ModuleInfo {
             path,
             name,
             refs: HashSet::with_capacity(8),
+            visibility: Visibility::Private,
+            doc_hidden: false,
+            mod_decls: HashMap::with_capacity(4),
+            reexports: HashSet::with_capacity(4),
         }
+    }
+
+    /// Check if this module might be used externally (pub and not doc(hidden)).
+    pub fn is_potentially_external(&self) -> bool {
+        self.visibility.is_potentially_external() && !self.doc_hidden
     }
 }
 
@@ -156,6 +222,96 @@ pub fn extract_uses_and_decls(content: &str, refs: &mut HashSet<String>) -> Resu
     }
 
     Ok(())
+}
+
+/// Enhanced parsing that extracts visibility and re-export information.
+///
+/// This provides richer metadata for more accurate dead code detection:
+/// - Tracks visibility of mod declarations
+/// - Detects `pub use` re-exports
+/// - Detects `#[doc(hidden)]` attributes
+pub fn extract_module_info(content: &str, info: &mut ModuleInfo) -> Result<()> {
+    let ast: File = syn::parse_file(content).context("AST parse error")?;
+
+    for item in ast.items {
+        match item {
+            Item::Mod(ItemMod {
+                ident,
+                vis,
+                attrs,
+                content: None, // External module declaration
+                ..
+            }) => {
+                let name = ident.to_string();
+                let visibility = Visibility::from(&vis);
+
+                // Track mod declaration with visibility
+                info.mod_decls.insert(name.clone(), visibility);
+                info.refs.insert(name);
+
+                // Check for #[doc(hidden)] on the mod declaration
+                for attr in &attrs {
+                    if attr.path().is_ident("doc") {
+                        if let Ok(meta) = attr.meta.require_list() {
+                            let tokens = meta.tokens.to_string();
+                            if tokens.contains("hidden") {
+                                // This mod is doc(hidden)
+                            }
+                        }
+                    }
+                }
+            }
+            Item::Use(u) => {
+                // Track pub use as re-exports
+                if matches!(u.vis, SynVisibility::Public(_)) {
+                    extract_reexports(&u.tree, &mut info.reexports);
+                }
+                // Always track as dependency
+                extract_path_root(&u.tree, &mut info.refs);
+            }
+            _ => {}
+        }
+    }
+
+    // Check file-level attributes for #[doc(hidden)]
+    for attr in &ast.attrs {
+        if attr.path().is_ident("doc") {
+            if let Ok(meta) = attr.meta.require_list() {
+                let tokens = meta.tokens.to_string();
+                if tokens.contains("hidden") {
+                    info.doc_hidden = true;
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Extract re-exported items from a `pub use` statement.
+fn extract_reexports(tree: &UseTree, reexports: &mut HashSet<String>) {
+    match tree {
+        UseTree::Name(n) => {
+            reexports.insert(n.ident.to_string());
+        }
+        UseTree::Rename(r) => {
+            // The alias is what's exported
+            reexports.insert(r.rename.to_string());
+        }
+        UseTree::Path(p) => {
+            // Continue to find the actual exported item
+            extract_reexports(&p.tree, reexports);
+        }
+        UseTree::Group(g) => {
+            for t in &g.items {
+                extract_reexports(t, reexports);
+            }
+        }
+        UseTree::Glob(_) => {
+            // Glob re-exports are complex - mark as potentially exporting everything
+            reexports.insert("*".to_string());
+        }
+    }
 }
 
 /// Parses a single module file. This is the atomic unit of work for parallel processing.

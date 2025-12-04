@@ -4,8 +4,22 @@ version = "0.1.0"
 edition = "2021"
 description = "NASA-grade dead module detection library for Rust"
 
+[features]
+default = ["fix", "html", "pixi", "callgraph"]
+# Auto-fix functionality to remove dead code
+fix = []
+# HTML visualization output
+html = []
+# WebGL/PixiJS visualization (larger binary size)
+pixi = []
+# Function call graph analysis
+callgraph = []
+# All optional features
+full = ["fix", "html", "pixi", "callgraph"]
+
 [dependencies]
 anyhow = "1"
+thiserror = "1"
 walkdir = "2"
 rayon = "1"
 petgraph = "0.6"

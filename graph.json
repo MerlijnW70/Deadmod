@@ -1,0 +1,463 @@
+{
+  "function_graph": {
+    "edges": [
+      {
+        "from": 5,
+        "to": 4
+      },
+      {
+        "from": 9,
+        "to": 8
+      },
+      {
+        "from": 11,
+        "to": 4
+      },
+      {
+        "from": 14,
+        "to": 1
+      },
+      {
+        "from": 13,
+        "to": 5
+      },
+      {
+        "from": 13,
+        "to": 7
+      },
+      {
+        "from": 1,
+        "to": 7
+      },
+      {
+        "from": 11,
+        "to": 5
+      },
+      {
+        "from": 0,
+        "to": 1
+      },
+      {
+        "from": 6,
+        "to": 4
+      },
+      {
+        "from": 10,
+        "to": 5
+      },
+      {
+        "from": 0,
+        "to": 5
+      },
+      {
+        "from": 5,
+        "to": 8
+      },
+      {
+        "from": 7,
+        "to": 8
+      },
+      {
+        "from": 7,
+        "to": 4
+      },
+      {
+        "from": 11,
+        "to": 1
+      },
+      {
+        "from": 10,
+        "to": 4
+      },
+      {
+        "from": 12,
+        "to": 7
+      },
+      {
+        "from": 9,
+        "to": 7
+      },
+      {
+        "from": 3,
+        "to": 1
+      },
+      {
+        "from": 8,
+        "to": 1
+      },
+      {
+        "from": 9,
+        "to": 4
+      },
+      {
+        "from": 11,
+        "to": 8
+      },
+      {
+        "from": 13,
+        "to": 8
+      },
+      {
+        "from": 6,
+        "to": 7
+      },
+      {
+        "from": 12,
+        "to": 5
+      },
+      {
+        "from": 5,
+        "to": 1
+      },
+      {
+        "from": 3,
+        "to": 7
+      },
+      {
+        "from": 14,
+        "to": 8
+      },
+      {
+        "from": 12,
+        "to": 8
+      },
+      {
+        "from": 9,
+        "to": 5
+      },
+      {
+        "from": 3,
+        "to": 5
+      },
+      {
+        "from": 13,
+        "to": 1
+      },
+      {
+        "from": 0,
+        "to": 8
+      },
+      {
+        "from": 8,
+        "to": 5
+      },
+      {
+        "from": 10,
+        "to": 7
+      },
+      {
+        "from": 0,
+        "to": 4
+      },
+      {
+        "from": 4,
+        "to": 8
+      },
+      {
+        "from": 3,
+        "to": 8
+      },
+      {
+        "from": 5,
+        "to": 7
+      },
+      {
+        "from": 6,
+        "to": 8
+      },
+      {
+        "from": 12,
+        "to": 4
+      },
+      {
+        "from": 8,
+        "to": 4
+      },
+      {
+        "from": 12,
+        "to": 1
+      },
+      {
+        "from": 3,
+        "to": 4
+      },
+      {
+        "from": 8,
+        "to": 7
+      },
+      {
+        "from": 4,
+        "to": 7
+      },
+      {
+        "from": 10,
+        "to": 1
+      },
+      {
+        "from": 6,
+        "to": 5
+      },
+      {
+        "from": 4,
+        "to": 1
+      },
+      {
+        "from": 2,
+        "to": 7
+      },
+      {
+        "from": 10,
+        "to": 8
+      },
+      {
+        "from": 14,
+        "to": 7
+      },
+      {
+        "from": 7,
+        "to": 1
+      },
+      {
+        "from": 2,
+        "to": 8
+      },
+      {
+        "from": 9,
+        "to": 1
+      },
+      {
+        "from": 2,
+        "to": 5
+      },
+      {
+        "from": 14,
+        "to": 4
+      },
+      {
+        "from": 2,
+        "to": 1
+      },
+      {
+        "from": 11,
+        "to": 7
+      },
+      {
+        "from": 2,
+        "to": 4
+      },
+      {
+        "from": 6,
+        "to": 1
+      },
+      {
+        "from": 1,
+        "to": 4
+      },
+      {
+        "from": 14,
+        "to": 5
+      },
+      {
+        "from": 1,
+        "to": 5
+      },
+      {
+        "from": 7,
+        "to": 5
+      },
+      {
+        "from": 4,
+        "to": 5
+      },
+      {
+        "from": 1,
+        "to": 8
+      },
+      {
+        "from": 13,
+        "to": 4
+      },
+      {
+        "from": 0,
+        "to": 7
+      }
+    ],
+    "modules": [
+      "main"
+    ],
+    "nodes": [
+      {
+        "dead": false,
+        "file": "\\\\?\\C:\\deadmod\\deadmod-cli\\src\\main.rs",
+        "full_path": "tests::test_is_ignored_exact_match",
+        "id": 0,
+        "is_method": false,
+        "module": "main",
+        "name": "test_is_ignored_exact_match",
+        "visibility": "private"
+      },
+      {
+        "dead": false,
+        "file": "\\\\?\\C:\\deadmod\\deadmod-cli\\src\\main.rs",
+        "full_path": "validate_output_path",
+        "id": 1,
+        "is_method": false,
+        "module": "main",
+        "name": "validate_output_path",
+        "visibility": "private"
+      },
+      {
+        "dead": false,
+        "file": "\\\\?\\C:\\deadmod\\deadmod-cli\\src\\main.rs",
+        "full_path": "tests::test_is_ignored_contains_match",
+        "id": 2,
+        "is_method": false,
+        "module": "main",
+        "name": "test_is_ignored_contains_match",
+        "visibility": "private"
+      },
+      {
+        "dead": false,
+        "file": "\\\\?\\C:\\deadmod\\deadmod-cli\\src\\main.rs",
+        "full_path": "main",
+        "id": 3,
+        "is_method": false,
+        "module": "main",
+        "name": "main",
+        "visibility": "private"
+      },
+      {
+        "dead": false,
+        "file": "\\\\?\\C:\\deadmod\\deadmod-cli\\src\\main.rs",
+        "full_path": "is_ignored",
+        "id": 4,
+        "is_method": false,
+        "module": "main",
+        "name": "is_ignored",
+        "visibility": "private"
+      },
+      {
+        "dead": false,
+        "file": "\\\\?\\C:\\deadmod\\deadmod-cli\\src\\main.rs",
+        "full_path": "print_workspace_info",
+        "id": 5,
+        "is_method": false,
+        "module": "main",
+        "name": "print_workspace_info",
+        "visibility": "private"
+      },
+      {
+        "dead": false,
+        "file": "\\\\?\\C:\\deadmod\\deadmod-cli\\src\\main.rs",
+        "full_path": "tests::test_is_workspace_true",
+        "id": 6,
+        "is_method": false,
+        "module": "main",
+        "name": "test_is_workspace_true",
+        "visibility": "private"
+      },
+      {
+        "dead": false,
+        "file": "\\\\?\\C:\\deadmod\\deadmod-cli\\src\\main.rs",
+        "full_path": "tests::create_temp_dir",
+        "id": 7,
+        "is_method": false,
+        "module": "main",
+        "name": "create_temp_dir",
+        "visibility": "private"
+      },
+      {
+        "dead": false,
+        "file": "\\\\?\\C:\\deadmod\\deadmod-cli\\src\\main.rs",
+        "full_path": "tests::create_file",
+        "id": 8,
+        "is_method": false,
+        "module": "main",
+        "name": "create_file",
+        "visibility": "private"
+      },
+      {
+        "dead": false,
+        "file": "\\\\?\\C:\\deadmod\\deadmod-cli\\src\\main.rs",
+        "full_path": "tests::test_find_crate_root_simple_crate",
+        "id": 9,
+        "is_method": false,
+        "module": "main",
+        "name": "test_find_crate_root_simple_crate",
+        "visibility": "private"
+      },
+      {
+        "dead": false,
+        "file": "\\\\?\\C:\\deadmod\\deadmod-cli\\src\\main.rs",
+        "full_path": "tests::test_is_ignored_suffix_match",
+        "id": 10,
+        "is_method": false,
+        "module": "main",
+        "name": "test_is_ignored_suffix_match",
+        "visibility": "private"
+      },
+      {
+        "dead": false,
+        "file": "\\\\?\\C:\\deadmod\\deadmod-cli\\src\\main.rs",
+        "full_path": "tests::test_find_crate_root_with_src_directory",
+        "id": 11,
+        "is_method": false,
+        "module": "main",
+        "name": "test_find_crate_root_with_src_directory",
+        "visibility": "private"
+      },
+      {
+        "dead": false,
+        "file": "\\\\?\\C:\\deadmod\\deadmod-cli\\src\\main.rs",
+        "full_path": "tests::test_is_workspace_false",
+        "id": 12,
+        "is_method": false,
+        "module": "main",
+        "name": "test_is_workspace_false",
+        "visibility": "private"
+      },
+      {
+        "dead": false,
+        "file": "\\\\?\\C:\\deadmod\\deadmod-cli\\src\\main.rs",
+        "full_path": "tests::test_find_crate_root_workspace_detection",
+        "id": 13,
+        "is_method": false,
+        "module": "main",
+        "name": "test_find_crate_root_workspace_detection",
+        "visibility": "private"
+      },
+      {
+        "dead": false,
+        "file": "\\\\?\\C:\\deadmod\\deadmod-cli\\src\\main.rs",
+        "full_path": "tests::test_is_workspace_no_cargo_toml",
+        "id": 14,
+        "is_method": false,
+        "module": "main",
+        "name": "test_is_workspace_no_cargo_toml",
+        "visibility": "private"
+      }
+    ],
+    "stats": {
+      "dead_functions": 0,
+      "total_edges": 70,
+      "total_functions": 15,
+      "total_modules": 1
+    }
+  },
+  "module_graph": {
+    "edges": [],
+    "nodes": [
+      {
+        "dead": false,
+        "file": "\\\\?\\C:\\deadmod\\deadmod-cli\\src\\main.rs",
+        "id": 0,
+        "name": "main"
+      }
+    ],
+    "stats": {
+      "dead_modules": 0,
+      "total_edges": 0,
+      "total_modules": 1
+    }
+  }
+}

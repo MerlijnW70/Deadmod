@@ -1,12 +1,12 @@
 {
   "modules": {
     "main": {
-      "hash": "54eb312adbe4fbda56f213ddc62e433b1f14ae642b7745ada1269a9c44d88616",
+      "hash": "9f5732c6d1aeb9619962e19a609b927e1709d4c2c9a9245e10f926fc11350ab7",
       "refs": [
-        "deadmod_core",
-        "std",
         "clap",
-        "anyhow"
+        "anyhow",
+        "std",
+        "deadmod_core"
       ]
     }
   }

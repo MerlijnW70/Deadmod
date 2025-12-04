@@ -7,8 +7,15 @@
 //!
 //! Caches parsed module information based on file content hashes,
 //! avoiding re-parsing unchanged files.
+//!
+//! # Cache Versioning
+//!
+//! The cache includes version metadata to ensure cache invalidation when:
+//! - Deadmod version changes (may have different parsing logic)
+//! - Rust toolchain version changes (affects syntax support)
+//! - Cache format changes
 
-use crate::parse::{extract_uses_and_decls, ModuleInfo};
+use crate::parse::{extract_uses_and_decls, ModuleInfo, Visibility};
 use anyhow::{Context, Result};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -21,17 +28,109 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// Maximum cache file size (50MB) - prevents unbounded cache growth
 const MAX_CACHE_SIZE_BYTES: usize = 50_000_000;
 
+/// Current cache format version. Increment when cache format changes.
+const CACHE_VERSION: u32 = 2;
+
+/// Deadmod version for cache compatibility checking.
+const DEADMOD_VERSION: &str = env!("CARGO_PKG_VERSION");
+
 /// Cached representation of a module.
 /// Stores the hash of the file and the module references found during parsing.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CachedModule {
     pub hash: String,
     pub refs: HashSet<String>,
+    /// Module visibility (added in cache v2)
+    #[serde(default)]
+    pub visibility: CachedVisibility,
+    /// Whether module is doc(hidden)
+    #[serde(default)]
+    pub doc_hidden: bool,
+}
+
+/// Serializable visibility for cache storage.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, Default, PartialEq, Eq)]
+pub enum CachedVisibility {
+    #[default]
+    Private,
+    Public,
+    PubCrate,
+    PubSuper,
+    PubIn,
+}
+
+impl From<Visibility> for CachedVisibility {
+    fn from(v: Visibility) -> Self {
+        match v {
+            Visibility::Private => Self::Private,
+            Visibility::Public => Self::Public,
+            Visibility::PubCrate => Self::PubCrate,
+            Visibility::PubSuper => Self::PubSuper,
+            Visibility::PubIn => Self::PubIn,
+        }
+    }
+}
+
+impl From<CachedVisibility> for Visibility {
+    fn from(v: CachedVisibility) -> Self {
+        match v {
+            CachedVisibility::Private => Self::Private,
+            CachedVisibility::Public => Self::Public,
+            CachedVisibility::PubCrate => Self::PubCrate,
+            CachedVisibility::PubSuper => Self::PubSuper,
+            CachedVisibility::PubIn => Self::PubIn,
+        }
+    }
+}
+
+/// Cache metadata for version checking.
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct CacheMetadata {
+    /// Cache format version
+    pub cache_version: u32,
+    /// Deadmod version that created this cache
+    pub deadmod_version: String,
+    /// Timestamp when cache was created
+    #[serde(default)]
+    pub created_at: u64,
+}
+
+impl CacheMetadata {
+    /// Create metadata for current environment.
+    pub fn current() -> Self {
+        let created_at = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+
+        Self {
+            cache_version: CACHE_VERSION,
+            deadmod_version: DEADMOD_VERSION.to_string(),
+            created_at,
+        }
+    }
+
+    /// Check if this cache is compatible with current version.
+    pub fn is_compatible(&self) -> bool {
+        // Cache version must match exactly
+        if self.cache_version != CACHE_VERSION {
+            return false;
+        }
+
+        // Major version of deadmod must match
+        let current_major = DEADMOD_VERSION.split('.').next().unwrap_or("0");
+        let cached_major = self.deadmod_version.split('.').next().unwrap_or("0");
+
+        current_major == cached_major
+    }
 }
 
 /// The full cache model, stored as a file in `.deadmod/cache.json`.
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct DeadmodCache {
+    /// Cache metadata for version checking
+    #[serde(default)]
+    pub metadata: CacheMetadata,
     /// Maps module name (e.g., "main") to its cached data.
     pub modules: HashMap<String, CachedModule>,
 }
@@ -53,7 +152,11 @@ pub fn file_hash(path: &Path) -> Result<String> {
 }
 
 /// Load the cache from `.deadmod/cache.json`.
-/// Returns `None` if file doesn't exist or is corrupted.
+///
+/// Returns `None` if:
+/// - File doesn't exist
+/// - File is corrupted
+/// - Cache version is incompatible with current deadmod version
 pub fn load_cache(crate_root: &Path) -> Option<DeadmodCache> {
     let path = crate_root.join(".deadmod/cache.json");
     if !path.exists() {
@@ -61,7 +164,23 @@ pub fn load_cache(crate_root: &Path) -> Option<DeadmodCache> {
     }
 
     let text = fs::read_to_string(&path).ok()?;
-    serde_json::from_str(&text).ok()
+    let cache: DeadmodCache = serde_json::from_str(&text).ok()?;
+
+    // Check version compatibility
+    if !cache.metadata.is_compatible() {
+        eprintln!(
+            "[INFO] Cache version mismatch (cache: v{} {}, current: v{} {}), rebuilding...",
+            cache.metadata.cache_version,
+            cache.metadata.deadmod_version,
+            CACHE_VERSION,
+            DEADMOD_VERSION
+        );
+        // Remove incompatible cache
+        let _ = fs::remove_file(&path);
+        return None;
+    }
+
+    Some(cache)
 }
 
 /// Save the current cache state to disk.
@@ -120,7 +239,8 @@ pub fn save_cache(crate_root: &Path, cache: &DeadmodCache) -> Result<()> {
 /// Result of processing a single file for incremental parsing.
 enum FileProcessResult {
     /// Successfully processed (name, info, cache_entry)
-    Ok(String, ModuleInfo, CachedModule),
+    /// ModuleInfo is boxed to reduce enum size (clippy::large_enum_variant)
+    Ok(String, Box<ModuleInfo>, CachedModule),
     /// Skipped due to error
     Skipped,
 }
@@ -163,7 +283,7 @@ fn process_file(
                 // Cache hit: reuse parsed refs without re-parsing
                 let mut info = ModuleInfo::new(file.clone());
                 info.refs = cached.refs.clone();
-                return FileProcessResult::Ok(name, info, cached.clone());
+                return FileProcessResult::Ok(name, Box::new(info), cached.clone());
             }
         }
     }
@@ -178,9 +298,11 @@ fn process_file(
     let cache_entry = CachedModule {
         hash,
         refs: info.refs.clone(),
+        visibility: CachedVisibility::from(info.visibility),
+        doc_hidden: info.doc_hidden,
     };
 
-    FileProcessResult::Ok(name, info, cache_entry)
+    FileProcessResult::Ok(name, Box::new(info), cache_entry)
 }
 
 /// Incremental parsing with NASA-grade resilience and parallel execution.
@@ -209,12 +331,13 @@ pub fn incremental_parse(
     // Aggregate results (sequential, but O(n) simple insertions)
     let mut mods = HashMap::with_capacity(results.len());
     let mut new_cache = DeadmodCache {
+        metadata: CacheMetadata::current(),
         modules: HashMap::with_capacity(results.len()),
     };
 
     for result in results {
         if let FileProcessResult::Ok(name, info, cache_entry) = result {
-            mods.insert(name.clone(), info);
+            mods.insert(name.clone(), *info);
             new_cache.modules.insert(name, cache_entry);
         }
     }
@@ -288,7 +411,10 @@ mod tests {
     fn test_cache_save_load() {
         let dir = create_temp_dir("save_load");
 
-        let mut cache = DeadmodCache::default();
+        let mut cache = DeadmodCache {
+            metadata: CacheMetadata::current(),
+            modules: HashMap::new(),
+        };
         let mut refs = HashSet::new();
         refs.insert("utils".to_string());
         cache.modules.insert(
@@ -296,6 +422,8 @@ mod tests {
             CachedModule {
                 hash: "abc123".to_string(),
                 refs,
+                visibility: CachedVisibility::default(),
+                doc_hidden: false,
             },
         );
 
@@ -456,23 +584,33 @@ mod tests {
         let dir = create_temp_dir("atomic_overwrite");
 
         // Write first cache
-        let mut cache1 = DeadmodCache::default();
+        let mut cache1 = DeadmodCache {
+            metadata: CacheMetadata::current(),
+            modules: HashMap::new(),
+        };
         cache1.modules.insert(
             "first".to_string(),
             CachedModule {
                 hash: "hash1".to_string(),
                 refs: HashSet::new(),
+                visibility: CachedVisibility::default(),
+                doc_hidden: false,
             },
         );
         save_cache(&dir, &cache1).unwrap();
 
         // Write second cache
-        let mut cache2 = DeadmodCache::default();
+        let mut cache2 = DeadmodCache {
+            metadata: CacheMetadata::current(),
+            modules: HashMap::new(),
+        };
         cache2.modules.insert(
             "second".to_string(),
             CachedModule {
                 hash: "hash2".to_string(),
                 refs: HashSet::new(),
+                visibility: CachedVisibility::default(),
+                doc_hidden: false,
             },
         );
         save_cache(&dir, &cache2).unwrap();
@@ -489,7 +627,10 @@ mod tests {
     fn test_cache_file_is_valid_json() {
         let dir = create_temp_dir("valid_json");
 
-        let mut cache = DeadmodCache::default();
+        let mut cache = DeadmodCache {
+            metadata: CacheMetadata::current(),
+            modules: HashMap::new(),
+        };
         let mut refs = HashSet::new();
         refs.insert("foo".to_string());
         refs.insert("bar".to_string());
@@ -498,6 +639,8 @@ mod tests {
             CachedModule {
                 hash: "abc123def456".to_string(),
                 refs,
+                visibility: CachedVisibility::default(),
+                doc_hidden: false,
             },
         );
         save_cache(&dir, &cache).unwrap();
@@ -550,12 +693,17 @@ mod tests {
         let dir = create_temp_dir("rapid_cycles");
 
         for i in 0..20 {
-            let mut cache = DeadmodCache::default();
+            let mut cache = DeadmodCache {
+                metadata: CacheMetadata::current(),
+                modules: HashMap::new(),
+            };
             cache.modules.insert(
                 format!("mod_{}", i),
                 CachedModule {
                     hash: format!("hash_{}", i),
                     refs: HashSet::new(),
+                    visibility: CachedVisibility::default(),
+                    doc_hidden: false,
                 },
             );
             save_cache(&dir, &cache).unwrap();
@@ -572,7 +720,10 @@ mod tests {
     fn test_large_cache_atomic_write() {
         let dir = create_temp_dir("large_cache");
 
-        let mut cache = DeadmodCache::default();
+        let mut cache = DeadmodCache {
+            metadata: CacheMetadata::current(),
+            modules: HashMap::new(),
+        };
         // Create a large cache with many modules
         for i in 0..500 {
             let mut refs = HashSet::new();
@@ -584,6 +735,8 @@ mod tests {
                 CachedModule {
                     hash: format!("hash_{:064x}", i),
                     refs,
+                    visibility: CachedVisibility::default(),
+                    doc_hidden: false,
                 },
             );
         }
@@ -600,7 +753,10 @@ mod tests {
     fn test_cache_special_characters_in_module_names() {
         let dir = create_temp_dir("special_chars");
 
-        let mut cache = DeadmodCache::default();
+        let mut cache = DeadmodCache {
+            metadata: CacheMetadata::current(),
+            modules: HashMap::new(),
+        };
         let mut refs = HashSet::new();
         refs.insert("dep_with_underscore".to_string());
         refs.insert("dep123".to_string());
@@ -610,6 +766,8 @@ mod tests {
             CachedModule {
                 hash: "hash".to_string(),
                 refs,
+                visibility: CachedVisibility::default(),
+                doc_hidden: false,
             },
         );
 
