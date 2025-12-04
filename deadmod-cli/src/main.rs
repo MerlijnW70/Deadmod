@@ -19,9 +19,9 @@ use deadmod_core::{
     extract_callgraph_functions, extract_const_usage, extract_constants,
     extract_declared_generics, extract_functions, extract_generic_usages, extract_macro_usages,
     extract_macros, extract_match_arms, extract_match_usages, extract_trait_usages,
-    extract_traits, extract_variant_usage, extract_variants, find_crate_root, find_dead,
-    find_root_modules, fix_dead_modules, gather_rs_files, generate_html_graph, generate_pixi_graph,
-    get_cluster_tree, init_structured_logging, is_workspace_root, load_config,
+    extract_traits, extract_variant_usage, extract_variants, find_all_crates, find_crate_root,
+    find_dead, find_root_modules, fix_dead_modules, gather_rs_files, generate_html_graph,
+    generate_pixi_graph, get_cluster_tree, init_structured_logging, is_workspace_root, load_config,
     module_graph_to_visualizer_json, print_json, print_plain, reachable_from_roots, visualize,
     CallGraph, ConstGraph, DeadArmReason, EnumGraph, FuncGraph, GenericGraph, GenericKind,
     MacroGraph, MatchGraph, TraitGraph,
@@ -1101,9 +1101,160 @@ fn main() -> Result<()> {
         std::process::exit(if has_dead { 1 } else { 0 });
     }
 
+    // Smart mode: Auto-detect workspace and scan all crates automatically
+    let input_path = Path::new(&cli.path);
+    let canonical_path = input_path.canonicalize()
+        .with_context(|| format!("Failed to canonicalize path: {}", cli.path))?;
+
+    // Check if this is a workspace root - if so, auto-scan all crates
+    if is_workspace_root(&canonical_path) {
+        eprintln!("INFO: Detected Cargo workspace - scanning all crates automatically...");
+
+        let all_crates = find_all_crates(&canonical_path)?;
+        eprintln!("INFO: Found {} crate(s):", all_crates.len());
+        for cr in &all_crates {
+            let name = cr.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+            eprintln!("  - {}", name);
+        }
+        eprintln!();
+
+        // Build combined module map with crate prefixes
+        let mut combined_mods: std::collections::HashMap<String, deadmod_core::ModuleInfo> = std::collections::HashMap::new();
+        let mut all_roots: Vec<String> = Vec::new();
+
+        for crate_root in &all_crates {
+            let crate_name = crate_root.file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| "unknown".to_string());
+
+            let files = match gather_rs_files(crate_root) {
+                Ok(f) => f,
+                Err(e) => {
+                    eprintln!("[WARN] Failed to scan {}: {}", crate_name, e);
+                    continue;
+                }
+            };
+
+            let cached = cache::load_cache(crate_root);
+            let mods = match cache::incremental_parse(crate_root, &files, cached) {
+                Ok(m) => m,
+                Err(e) => {
+                    eprintln!("[WARN] Failed to parse {}: {}", crate_name, e);
+                    continue;
+                }
+            };
+
+            // Find root modules for this crate
+            let crate_roots = find_root_modules(crate_root);
+            for root_mod in crate_roots {
+                all_roots.push(format!("{}::{}", crate_name, root_mod));
+            }
+
+            // Add modules with crate prefix
+            for (name, mut info) in mods {
+                let prefixed_name = format!("{}::{}", crate_name, name);
+                // Update refs to use prefixed names
+                let prefixed_refs: HashSet<String> = info.refs.iter()
+                    .map(|r| format!("{}::{}", crate_name, r))
+                    .collect();
+                info.refs = prefixed_refs;
+                combined_mods.insert(prefixed_name, info);
+            }
+        }
+
+        if combined_mods.is_empty() {
+            eprintln!("No modules found in workspace.");
+            std::process::exit(0);
+        }
+
+        // Build combined graph
+        let graph = build_graph(&combined_mods);
+        let valid_roots = all_roots.iter()
+            .filter(|name| combined_mods.contains_key(*name))
+            .map(|s| s.as_str());
+        let reachable = reachable_from_roots(&graph, valid_roots);
+
+        // Find dead modules
+        let mut dead = find_dead(&combined_mods, &reachable);
+        dead.sort();
+
+        // PixiJS graph for workspace
+        if cli.html_pixi || cli.html_pixi_file.is_some() {
+            let reachable_owned: HashSet<String> = reachable.iter().map(|s| s.to_string()).collect();
+            let html = generate_pixi_graph(&combined_mods, &reachable_owned);
+
+            if let Some(ref file) = cli.html_pixi_file {
+                match validate_output_path(file) {
+                    Ok(safe_path) => {
+                        if let Err(e) = fs::write(&safe_path, &html) {
+                            eprintln!("[WARN] PixiJS graph write failed: {}", e);
+                        } else {
+                            eprintln!("PixiJS WebGL graph saved to: {}", safe_path.display());
+                        }
+                    }
+                    Err(e) => eprintln!("[WARN] Invalid output path: {}", e),
+                }
+            } else {
+                println!("{}", html);
+            }
+            std::process::exit(if dead.is_empty() { 0 } else { 1 });
+        }
+
+        // HTML graph for workspace
+        if cli.html || cli.html_file.is_some() {
+            let reachable_owned: HashSet<String> = reachable.iter().map(|s| s.to_string()).collect();
+            let html = generate_html_graph(&combined_mods, &reachable_owned);
+
+            if let Some(ref file) = cli.html_file {
+                match validate_output_path(file) {
+                    Ok(safe_path) => {
+                        if let Err(e) = fs::write(&safe_path, &html) {
+                            eprintln!("[WARN] HTML write failed: {}", e);
+                        } else {
+                            eprintln!("HTML graph saved to: {}", safe_path.display());
+                        }
+                    }
+                    Err(e) => eprintln!("[WARN] Invalid output path: {}", e),
+                }
+            } else {
+                println!("{}", html);
+            }
+            std::process::exit(if dead.is_empty() { 0 } else { 1 });
+        }
+
+        // Text output for workspace
+        if cli.json {
+            let json_output = serde_json::json!({
+                "workspace": true,
+                "crates": all_crates.len(),
+                "total_modules": combined_mods.len(),
+                "reachable": reachable.len(),
+                "dead_count": dead.len(),
+                "dead_modules": dead,
+            });
+            println!("{}", serde_json::to_string_pretty(&json_output)?);
+        } else {
+            println!("=== Workspace Analysis ===\n");
+            println!("Crates: {}", all_crates.len());
+            println!("Total modules: {}", combined_mods.len());
+            println!("Reachable: {}", reachable.len());
+            println!("Dead: {}\n", dead.len());
+
+            if !dead.is_empty() {
+                println!("DEAD MODULES:");
+                for m in &dead {
+                    println!("  - {}", m);
+                }
+            } else {
+                println!("No dead modules found.");
+            }
+        }
+
+        std::process::exit(if dead.is_empty() { 0 } else { 1 });
+    }
+
     // Single crate mode (original behavior)
     // 1. Determine crate root
-    let input_path = Path::new(&cli.path);
     print_workspace_info(input_path);
     let root = find_crate_root(input_path)
         .with_context(|| format!("Failed to find crate root from: {}", cli.path))?;
