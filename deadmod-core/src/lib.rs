@@ -137,8 +137,12 @@ pub use report::{print_json, print_plain};
 // Root detection
 pub use root::find_root_modules;
 
-// File scanning
-pub use scan::{gather_rs_files, gather_rs_files_with_excludes};
+// File scanning and module discovery
+pub use scan::{
+    gather_rs_files, gather_rs_files_with_excludes,
+    discover_modules, get_cluster_tree,
+    DiscoveredModule, ModuleCluster, ModuleDiscovery,
+};
 
 // Workspace analysis
 pub use workspace::{

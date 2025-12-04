@@ -5,7 +5,8 @@
 //! Features:
 //! - WebGL hardware acceleration via PixiJS
 //! - Force-directed layout with Barnes-Hut optimization
-//! - Module clustering with color-coded groups
+//! - Module clustering with color-coded groups and visual bounding boxes
+//! - Hierarchical cluster visualization (nested directory structure)
 //! - Edge bundling with Bézier curves
 //! - Inspector panel with detailed statistics
 //! - Responsive zoom/pan/drag
@@ -37,13 +38,18 @@ pub fn generate_pixi_graph(mods: &HashMap<String, ModuleInfo>, reachable: &HashS
         }
     }
 
+    // Collect top-level clusters for hierarchical grouping
+    let mut top_clusters: HashSet<String> = HashSet::new();
+
     for (name, info) in mods {
         let status = if reachable.contains(name) { "reachable" } else { "dead" };
-        let cluster = extract_parent_module(&info.path.display().to_string());
+        let path_str = info.path.display().to_string();
+        let cluster = extract_parent_module(&path_str);
+        let top_cluster = extract_top_cluster(&path_str);
         clusters.insert(cluster.clone());
+        top_clusters.insert(top_cluster.clone());
 
         // Strip Windows extended-length path prefix
-        let path_str = info.path.display().to_string();
         let path_clean = path_str.strip_prefix(r"\\?\").unwrap_or(&path_str);
         let path_escaped = path_clean.replace('\\', "\\\\").replace('"', "\\\"");
 
@@ -52,9 +58,10 @@ pub fn generate_pixi_graph(mods: &HashMap<String, ModuleInfo>, reachable: &HashS
         let inbound_count = inbound_counts.get(name).copied().unwrap_or(0);
         let visibility = format!("{:?}", info.visibility).to_lowercase();
 
+        // Include topCluster for hierarchical visualization
         nodes.push(format!(
-            r#"{{ "id": "{}", "label": "{}", "status": "{}", "path": "{}", "cluster": "{}", "refCount": {}, "inboundCount": {}, "visibility": "{}" }}"#,
-            name, name, status, path_escaped, cluster, ref_count, inbound_count, visibility
+            r#"{{ "id": "{}", "label": "{}", "status": "{}", "path": "{}", "cluster": "{}", "topCluster": "{}", "refCount": {}, "inboundCount": {}, "visibility": "{}" }}"#,
+            name, name, status, path_escaped, cluster, top_cluster, ref_count, inbound_count, visibility
         ));
     }
 
@@ -166,21 +173,6 @@ pub fn generate_pixi_graph(mods: &HashMap<String, ModuleInfo>, reachable: &HashS
         }}
         #controls button:hover {{ background: #0f3460; transform: scale(1.05); }}
         #controls button.active {{ background: #e94560; }}
-        #legend {{
-            position: fixed;
-            bottom: 100px;
-            left: 20px;
-            background: rgba(22, 33, 62, 0.9);
-            border: 1px solid #0f3460;
-            border-radius: 10px;
-            padding: 15px;
-            font-size: 12px;
-            z-index: 1000;
-            backdrop-filter: blur(10px);
-        }}
-        #legend h4 {{ margin-bottom: 10px; color: #e94560; }}
-        .legend-item {{ display: flex; align-items: center; gap: 10px; margin: 6px 0; }}
-        .legend-color {{ width: 18px; height: 18px; border-radius: 50%; }}
         /* Inspector Panel */
         #inspector {{
             position: fixed;
@@ -320,22 +312,11 @@ pub fn generate_pixi_graph(mods: &HashMap<String, ModuleInfo>, reachable: &HashS
         <button id="reset" title="Reset View">R</button>
         <button id="toggle-bundling" title="Edge Bundling" class="active">B</button>
         <button id="toggle-clusters" title="Cluster Gravity" class="active">C</button>
+        <button id="toggle-boxes" title="Cluster Boxes" class="active">□</button>
         <button id="toggle-sim" title="Pause Simulation">⏸</button>
         <button id="clear-highlight" title="Clear Highlight (Esc)">✕</button>
     </div>
     <div id="toast"></div>
-
-    <div id="legend">
-        <h4>Legend</h4>
-        <div class="legend-item">
-            <div class="legend-color" style="background: #90EE90;"></div>
-            <span>Reachable</span>
-        </div>
-        <div class="legend-item">
-            <div class="legend-color" style="background: #F08080;"></div>
-            <span>Dead</span>
-        </div>
-    </div>
 
     <div id="inspector">
         <h2>📋 Module Inspector</h2>
@@ -367,14 +348,19 @@ pub fn generate_pixi_graph(mods: &HashMap<String, ModuleInfo>, reachable: &HashS
         }});
         container.appendChild(app.canvas);
 
-        // Containers
+        // Containers (order matters: clusters -> edges -> nodes for proper layering)
         const worldContainer = new PIXI.Container();
+        const clusterGraphics = new PIXI.Graphics();  // Cluster bounding boxes
         const edgeGraphics = new PIXI.Graphics();
         const nodeContainer = new PIXI.Container();
 
+        worldContainer.addChild(clusterGraphics);  // Draw clusters first (behind)
         worldContainer.addChild(edgeGraphics);
         worldContainer.addChild(nodeContainer);
         app.stage.addChild(worldContainer);
+
+        // Toggle for cluster boxes visibility
+        let showClusterBoxes = true;
 
         // Colors
         const ALIVE_COLOR = 0x90EE90;
@@ -443,19 +429,70 @@ pub fn generate_pixi_graph(mods: &HashMap<String, ModuleInfo>, reachable: &HashS
             if (outbound[e.from]) outbound[e.from].push(e.to);
         }});
 
-        // Cluster centers
+        // Cluster centers and bounding boxes
         const clusterCenters = {{}};
+        const clusterBounds = {{}};  // Store bounding boxes per top-level cluster
+
         function updateClusterCenters() {{
-            clusters.forEach(c => {{ clusterCenters[c.id] = {{ x: 0, y: 0, count: 0 }}; }});
+            // Reset cluster data
+            clusters.forEach(c => {{
+                clusterCenters[c.id] = {{ x: 0, y: 0, count: 0 }};
+            }});
+
+            // Track bounds per topCluster for hierarchical boxes
+            const topClusters = new Set(nodes.map(n => n.topCluster));
+            topClusters.forEach(tc => {{
+                clusterBounds[tc] = {{ minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity, count: 0 }};
+            }});
+
             Object.values(nodeMap).forEach(n => {{
+                // Update cluster centers
                 if (clusterCenters[n.cluster]) {{
                     clusterCenters[n.cluster].x += n.x;
                     clusterCenters[n.cluster].y += n.y;
                     clusterCenters[n.cluster].count++;
                 }}
+                // Update top-level cluster bounds
+                if (clusterBounds[n.topCluster]) {{
+                    clusterBounds[n.topCluster].minX = Math.min(clusterBounds[n.topCluster].minX, n.x - 40);
+                    clusterBounds[n.topCluster].minY = Math.min(clusterBounds[n.topCluster].minY, n.y - 20);
+                    clusterBounds[n.topCluster].maxX = Math.max(clusterBounds[n.topCluster].maxX, n.x + 40);
+                    clusterBounds[n.topCluster].maxY = Math.max(clusterBounds[n.topCluster].maxY, n.y + 20);
+                    clusterBounds[n.topCluster].count++;
+                }}
             }});
             Object.values(clusterCenters).forEach(c => {{
                 if (c.count > 0) {{ c.x /= c.count; c.y /= c.count; }}
+            }});
+        }}
+
+        // Draw cluster bounding boxes with labels
+        function drawClusterBoxes() {{
+            clusterGraphics.clear();
+            if (!showClusterBoxes) return;
+
+            Object.entries(clusterBounds).forEach(([name, bounds]) => {{
+                if (bounds.count === 0 || name === 'root') return;
+
+                const color = clusterColorMap[name] || 0x333366;
+                const padding = 25;
+                const x = bounds.minX - padding;
+                const y = bounds.minY - padding;
+                const w = bounds.maxX - bounds.minX + padding * 2;
+                const h = bounds.maxY - bounds.minY + padding * 2;
+
+                // Draw rounded box with semi-transparent fill
+                clusterGraphics.lineStyle(2, color, 0.6);
+                clusterGraphics.beginFill(color, 0.08);
+                clusterGraphics.drawRoundedRect(x, y, w, h, 12);
+                clusterGraphics.endFill();
+
+                // Draw cluster label in top-left corner
+                clusterGraphics.lineStyle(0);
+                clusterGraphics.beginFill(color, 0.8);
+                const labelWidth = Math.min(name.length * 8 + 16, w - 10);
+                clusterGraphics.drawRoundedRect(x + 5, y + 5, labelWidth, 20, 4);
+                clusterGraphics.endFill();
             }});
         }}
 
@@ -769,6 +806,9 @@ pub fn generate_pixi_graph(mods: &HashMap<String, ModuleInfo>, reachable: &HashS
         const clusterBtn = document.getElementById('toggle-clusters');
         clusterBtn.onclick = () => {{ clusterGravity = !clusterGravity; clusterBtn.classList.toggle('active', clusterGravity); }};
 
+        const boxBtn = document.getElementById('toggle-boxes');
+        boxBtn.onclick = () => {{ showClusterBoxes = !showClusterBoxes; boxBtn.classList.toggle('active', showClusterBoxes); }};
+
         const simBtn = document.getElementById('toggle-sim');
         simBtn.onclick = () => {{
             simRunning = !simRunning;
@@ -793,6 +833,7 @@ pub fn generate_pixi_graph(mods: &HashMap<String, ModuleInfo>, reachable: &HashS
 
         app.ticker.add(() => {{
             simulate();
+            drawClusterBoxes();  // Draw cluster bounding boxes
             drawEdges();
             updateNodePositions();
 
@@ -819,8 +860,44 @@ pub fn generate_pixi_graph(mods: &HashMap<String, ModuleInfo>, reachable: &HashS
     )
 }
 
-/// Extract parent module name from file path for clustering.
+/// Extract hierarchical cluster path from file path for clustering.
+///
+/// Generates paths like "api::routes" for src/api/routes.rs
+/// This enables hierarchical visualization where clusters are nested.
 fn extract_parent_module(path: &str) -> String {
+    let path = path.replace('\\', "/");
+    let parts: Vec<&str> = path.split('/').collect();
+
+    // Find src/ and extract everything after it (up to but not including the filename)
+    for (i, part) in parts.iter().enumerate() {
+        if *part == "src" && i + 1 < parts.len() {
+            // Collect path segments after src/
+            let mut segments: Vec<&str> = Vec::new();
+            for j in (i + 1)..parts.len() {
+                let segment = parts[j];
+                // Skip the final .rs file
+                if segment.ends_with(".rs") {
+                    // If this is the first segment and it's a .rs file (e.g., src/lib.rs)
+                    if segments.is_empty() {
+                        return segment.trim_end_matches(".rs").to_string();
+                    }
+                    break;
+                }
+                segments.push(segment);
+            }
+            if !segments.is_empty() {
+                return segments.join("::");
+            }
+        }
+    }
+
+    parts.last()
+        .map(|s| s.trim_end_matches(".rs").to_string())
+        .unwrap_or_else(|| "unknown".to_string())
+}
+
+/// Extract the top-level cluster (first directory after src/).
+fn extract_top_cluster(path: &str) -> String {
     let path = path.replace('\\', "/");
     let parts: Vec<&str> = path.split('/').collect();
 
@@ -828,15 +905,12 @@ fn extract_parent_module(path: &str) -> String {
         if *part == "src" && i + 1 < parts.len() {
             let next = parts[i + 1];
             if next.ends_with(".rs") {
-                return next.trim_end_matches(".rs").to_string();
+                return "root".to_string();
             }
             return next.to_string();
         }
     }
-
-    parts.last()
-        .map(|s| s.trim_end_matches(".rs").to_string())
-        .unwrap_or_else(|| "unknown".to_string())
+    "root".to_string()
 }
 
 #[cfg(test)]
