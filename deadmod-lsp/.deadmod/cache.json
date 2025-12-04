@@ -1,13 +1,13 @@
 {
   "modules": {
     "main": {
-      "hash": "3cb2ce9222b37161d22d45a09c53da2e85cfd522c36c1e035ea48506ba8ceb99",
+      "hash": "e38d04c5dfc757af76661b0908e96650cebebc52cfc380a69874450d0e12bb9f",
       "refs": [
-        "anyhow",
-        "std",
-        "tokio",
         "tower_lsp",
-        "deadmod_core"
+        "std",
+        "deadmod_core",
+        "anyhow",
+        "tokio"
       ]
     }
   }

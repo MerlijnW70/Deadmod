@@ -1,0 +1,7 @@
+digraph deadmod {
+  rankdir=LR;
+  node [shape=box, style=filled, fontname="JetBrains Mono"];
+
+  "main" [fillcolor=lightgreen];
+
+}

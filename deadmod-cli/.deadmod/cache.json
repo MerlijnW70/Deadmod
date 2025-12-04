@@ -3,10 +3,10 @@
     "main": {
       "hash": "9f5732c6d1aeb9619962e19a609b927e1709d4c2c9a9245e10f926fc11350ab7",
       "refs": [
-        "clap",
-        "anyhow",
+        "deadmod_core",
         "std",
-        "deadmod_core"
+        "anyhow",
+        "clap"
       ]
     }
   }

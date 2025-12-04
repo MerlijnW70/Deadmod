@@ -345,7 +345,7 @@ pub fn generate_pixi_graph(mods: &HashMap<String, ModuleInfo>, reachable: &HashS
     </div>
 
     <script>
-    (function() {{
+    (async function() {{
         const nodes = {nodes_json};
         const edges = {edges_json};
         const clusters = [{clusters_json}];
@@ -355,16 +355,17 @@ pub fn generate_pixi_graph(mods: &HashMap<String, ModuleInfo>, reachable: &HashS
         let clusterGravity = true;
         let simRunning = true;
 
-        // PixiJS setup
+        // PixiJS setup (v7.x async initialization)
         const container = document.getElementById('canvas-container');
-        const app = new PIXI.Application({{
+        const app = new PIXI.Application();
+        await app.init({{
             resizeTo: container,
             backgroundColor: 0x0d0d1a,
             antialias: true,
             resolution: window.devicePixelRatio || 1,
             autoDensity: true,
         }});
-        container.appendChild(app.view);
+        container.appendChild(app.canvas);
 
         // Containers
         const worldContainer = new PIXI.Container();
@@ -721,25 +722,25 @@ pub fn generate_pixi_graph(mods: &HashMap<String, ModuleInfo>, reachable: &HashS
 
         // Pan/Zoom
         let dragging = false, lastX = 0, lastY = 0;
-        app.view.addEventListener('pointerdown', e => {{
+        app.canvas.addEventListener('pointerdown', e => {{
             dragging = true;
             lastX = e.clientX;
             lastY = e.clientY;
         }});
-        app.view.addEventListener('pointermove', e => {{
+        app.canvas.addEventListener('pointermove', e => {{
             if (!dragging) return;
             worldContainer.x += e.clientX - lastX;
             worldContainer.y += e.clientY - lastY;
             lastX = e.clientX;
             lastY = e.clientY;
         }});
-        app.view.addEventListener('pointerup', () => {{ dragging = false; }});
-        app.view.addEventListener('pointerleave', () => {{ dragging = false; }});
+        app.canvas.addEventListener('pointerup', () => {{ dragging = false; }});
+        app.canvas.addEventListener('pointerleave', () => {{ dragging = false; }});
 
-        app.view.addEventListener('wheel', e => {{
+        app.canvas.addEventListener('wheel', e => {{
             e.preventDefault();
             const delta = e.deltaY > 0 ? 0.9 : 1.1;
-            const rect = app.view.getBoundingClientRect();
+            const rect = app.canvas.getBoundingClientRect();
             const mx = e.clientX - rect.left, my = e.clientY - rect.top;
             const wx = (mx - worldContainer.x) / worldContainer.scale.x;
             const wy = (my - worldContainer.y) / worldContainer.scale.y;
