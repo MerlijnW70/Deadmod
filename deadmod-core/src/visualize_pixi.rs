@@ -120,7 +120,7 @@ pub fn generate_pixi_graph(mods: &HashMap<String, ModuleInfo>, reachable: &HashS
     <title>Deadmod - PixiJS WebGL Graph</title>
     <!-- Security: SRI hash ensures CDN integrity -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.3.2/pixi.min.js"
-            integrity="sha384-RCv8k7M0svH2bjL5ymf31cHEJj03dM6v/swaMFDv7mjIAbbxLfOQlNyLRN4qyGxe"
+            integrity="sha384-3wqglGMjR9U1G89jiQ7NAkDL25fFnegjLwujmJu5o5AvOwEAf/ysfl8uBtBw7Eum"
             crossorigin="anonymous"></script>
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
@@ -351,7 +351,10 @@ pub fn generate_pixi_graph(mods: &HashMap<String, ModuleInfo>, reachable: &HashS
 
     <script>
     (async function() {{
+        try {{
+        console.log('Deadmod: Starting PixiJS visualization...');
         const nodes = {nodes_json};
+        console.log('Deadmod: Loaded', nodes.length, 'nodes');
         const edges = {edges_json};
         const clusters = [{clusters_json}];
 
@@ -360,17 +363,17 @@ pub fn generate_pixi_graph(mods: &HashMap<String, ModuleInfo>, reachable: &HashS
         let clusterGravity = true;
         let simRunning = true;
 
-        // PixiJS setup (v7.x async initialization)
+        // PixiJS setup (v7.x constructor initialization)
         const container = document.getElementById('canvas-container');
-        const app = new PIXI.Application();
-        await app.init({{
+        const app = new PIXI.Application({{
             resizeTo: container,
             backgroundColor: 0x0d0d1a,
             antialias: true,
             resolution: window.devicePixelRatio || 1,
             autoDensity: true,
         }});
-        container.appendChild(app.canvas);
+        container.appendChild(app.view);
+        console.log('Deadmod: PixiJS initialized, canvas size:', app.screen.width, 'x', app.screen.height);
 
         // Containers (order matters: clusters -> edges -> nodes for proper layering)
         const worldContainer = new PIXI.Container();
@@ -783,25 +786,25 @@ pub fn generate_pixi_graph(mods: &HashMap<String, ModuleInfo>, reachable: &HashS
 
         // Pan/Zoom
         let dragging = false, lastX = 0, lastY = 0;
-        app.canvas.addEventListener('pointerdown', e => {{
+        app.view.addEventListener('pointerdown', e => {{
             dragging = true;
             lastX = e.clientX;
             lastY = e.clientY;
         }});
-        app.canvas.addEventListener('pointermove', e => {{
+        app.view.addEventListener('pointermove', e => {{
             if (!dragging) return;
             worldContainer.x += e.clientX - lastX;
             worldContainer.y += e.clientY - lastY;
             lastX = e.clientX;
             lastY = e.clientY;
         }});
-        app.canvas.addEventListener('pointerup', () => {{ dragging = false; }});
-        app.canvas.addEventListener('pointerleave', () => {{ dragging = false; }});
+        app.view.addEventListener('pointerup', () => {{ dragging = false; }});
+        app.view.addEventListener('pointerleave', () => {{ dragging = false; }});
 
-        app.canvas.addEventListener('wheel', e => {{
+        app.view.addEventListener('wheel', e => {{
             e.preventDefault();
             const delta = e.deltaY > 0 ? 0.9 : 1.1;
-            const rect = app.canvas.getBoundingClientRect();
+            const rect = app.view.getBoundingClientRect();
             const mx = e.clientX - rect.left, my = e.clientY - rect.top;
             const wx = (mx - worldContainer.x) / worldContainer.scale.x;
             const wy = (my - worldContainer.y) / worldContainer.scale.y;
@@ -870,6 +873,11 @@ pub fn generate_pixi_graph(mods: &HashMap<String, ModuleInfo>, reachable: &HashS
                 lastTime = now;
             }}
         }});
+        console.log('Deadmod: Visualization started successfully');
+        }} catch (err) {{
+            console.error('Deadmod ERROR:', err);
+            document.getElementById('canvas-container').innerHTML = '<div style="color:red;padding:20px;">Error: ' + err.message + '</div>';
+        }}
     }})();
     </script>
 </body>
