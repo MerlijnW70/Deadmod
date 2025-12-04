@@ -15,15 +15,16 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use deadmod_core::{
-    analyze_workspace, build_graph, cache, extract_call_names, extract_call_usages,
+    analyze_workspace, build_graph, cache, discover_modules, extract_call_names, extract_call_usages,
     extract_callgraph_functions, extract_const_usage, extract_constants,
     extract_declared_generics, extract_functions, extract_generic_usages, extract_macro_usages,
     extract_macros, extract_match_arms, extract_match_usages, extract_trait_usages,
     extract_traits, extract_variant_usage, extract_variants, find_crate_root, find_dead,
     find_root_modules, fix_dead_modules, gather_rs_files, generate_html_graph, generate_pixi_graph,
-    init_structured_logging, is_workspace_root, load_config, module_graph_to_visualizer_json,
-    print_json, print_plain, reachable_from_roots, visualize, CallGraph, ConstGraph, DeadArmReason,
-    EnumGraph, FuncGraph, GenericGraph, GenericKind, MacroGraph, MatchGraph, TraitGraph,
+    get_cluster_tree, init_structured_logging, is_workspace_root, load_config,
+    module_graph_to_visualizer_json, print_json, print_plain, reachable_from_roots, visualize,
+    CallGraph, ConstGraph, DeadArmReason, EnumGraph, FuncGraph, GenericGraph, GenericKind,
+    MacroGraph, MatchGraph, TraitGraph,
 };
 
 #[derive(Parser, Debug)]
@@ -132,6 +133,10 @@ pub struct Cli {
     /// Export combined graph (modules + functions) to JSON file
     #[arg(long, value_name = "FILE")]
     export_combined: Option<String>,
+
+    /// Discover all modules via filesystem structure (show cluster hierarchy)
+    #[arg(long)]
+    discover: bool,
 }
 
 /// Prints workspace info when running on a workspace root.
@@ -226,6 +231,70 @@ fn main() -> Result<()> {
     init_structured_logging();
 
     let cli = Cli::parse();
+
+    // Filesystem-based module discovery mode
+    if cli.discover {
+        let input_path = Path::new(&cli.path);
+        let root = find_crate_root(input_path)
+            .with_context(|| format!("Failed to find crate root from: {}", cli.path))?;
+
+        let discovery = discover_modules(&root)?;
+
+        if cli.json {
+            let clusters_json: Vec<_> = discovery.clusters.values().map(|c| {
+                serde_json::json!({
+                    "name": c.name,
+                    "path": c.path.display().to_string(),
+                    "relative_path": c.relative_path,
+                    "depth": c.depth,
+                    "has_mod_file": c.mod_file.is_some(),
+                    "modules": c.modules.iter().map(|m| &m.name).collect::<Vec<_>>(),
+                    "children": c.children,
+                    "parent": c.parent,
+                })
+            }).collect();
+
+            let json_output = serde_json::json!({
+                "file_count": discovery.file_count,
+                "cluster_count": discovery.clusters.len(),
+                "crate_roots": discovery.crate_roots.iter().map(|p| p.display().to_string()).collect::<Vec<_>>(),
+                "clusters": clusters_json,
+            });
+            println!("{}", serde_json::to_string_pretty(&json_output)?);
+        } else {
+            println!("=== Filesystem Module Discovery ===\n");
+            println!("Crate root: {}", root.display());
+            println!("Total .rs files: {}", discovery.file_count);
+            println!("Clusters (directories): {}\n", discovery.clusters.len());
+
+            // Print cluster hierarchy as tree
+            let tree = get_cluster_tree(&discovery);
+            println!("CLUSTER HIERARCHY:");
+            for (name, children) in &tree {
+                let indent = "  ".repeat(name.matches("::").count());
+                let icon = if children.is_empty() { "📄" } else { "📁" };
+                println!("{}{}  {}", indent, icon, name);
+
+                // Show modules in this cluster
+                if let Some(cluster) = discovery.clusters.get(name) {
+                    for module in &cluster.modules {
+                        let mod_indent = "  ".repeat(name.matches("::").count() + 1);
+                        let status = if module.is_crate_root { "🎯" } else { "  " };
+                        println!("{}{}  {}", mod_indent, status, module.name);
+                    }
+                }
+            }
+
+            if !discovery.crate_roots.is_empty() {
+                println!("\nCRATE ROOTS:");
+                for root_file in &discovery.crate_roots {
+                    println!("  🎯 {}", root_file.display());
+                }
+            }
+        }
+
+        return Ok(());
+    }
 
     // Dead function detection mode
     if cli.dead_func {
