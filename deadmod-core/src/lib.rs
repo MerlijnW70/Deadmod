@@ -158,9 +158,10 @@ pub use fix::{clean_empty_dirs, fix_dead_modules, remove_file, remove_mod_declar
 #[cfg(feature = "callgraph")]
 pub use callgraph::{
     extract_call_usages, extract_call_usages_resolved, extract_callgraph_functions,
+    extract_callgraph_parallel,
     collect_use_statements, resolve_call_full, resolve_call_path, segments_to_path,
-    CallGraph, CallGraphAnalysis, CallGraphStats, CallUsageResult, FunctionDef,
-    ModulePathContext, ResolvedCall, UseMap,
+    CallGraph, CallGraphAnalysis, CallGraphStats, CallgraphExtractionResult, CallUsageResult,
+    FunctionDef, ModulePathContext, ResolvedCall, UseMap,
 };
 
 #[cfg(feature = "html")]

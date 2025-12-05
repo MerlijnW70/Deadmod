@@ -15,6 +15,8 @@ use syn::{
     Visibility,
 };
 
+use crate::common::visibility_str;
+
 /// Information about a function definition.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FunctionDef {
@@ -48,22 +50,6 @@ impl FunctionExtractor {
         }
     }
 
-    fn visibility_str(v: &Visibility) -> &'static str {
-        match v {
-            Visibility::Public(_) => "pub",
-            Visibility::Restricted(r) => {
-                if r.path.is_ident("crate") {
-                    "pub(crate)"
-                } else if r.path.is_ident("super") {
-                    "pub(super)"
-                } else {
-                    "pub(restricted)"
-                }
-            }
-            Visibility::Inherited => "private",
-        }
-    }
-
     fn build_full_path(&self, name: &str) -> String {
         if self.mod_stack.is_empty() {
             name.to_string()
@@ -80,7 +66,7 @@ impl FunctionExtractor {
             file: self.file_path.clone(),
             is_method,
             parent_type,
-            visibility: Self::visibility_str(vis).to_string(),
+            visibility: visibility_str(vis).to_string(),
         });
     }
 }
