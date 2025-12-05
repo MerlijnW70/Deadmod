@@ -1,16 +1,49 @@
 //! Auto-fix functionality for removing dead modules.
 //!
-//! NASA-grade resilience: never panics, handles all errors gracefully.
+//! This module provides safe, reversible operations for cleaning up dead code
+//! detected by the analyzer. All operations support dry-run mode for previewing
+//! changes before applying them.
 //!
-//! Performance characteristics:
+//! # Features
+//!
+//! - **Safe file deletion**: Remove dead module files with dry-run support
+//! - **Declaration removal**: Automatically remove `mod xyz;` from parent modules
+//! - **Empty directory cleanup**: Clean up directories left empty after fixes
+//! - **Comprehensive logging**: All actions are logged for auditability
+//!
+//! # Safety Guarantees
+//!
+//! - Never follows symlinks (prevents accidental deletion outside project)
+//! - Validates all paths are within the project root
+//! - Dry-run mode for previewing changes
+//! - Atomic operations where possible
+//!
+//! # Example
+//!
+//! ```ignore
+//! use deadmod_core::fix::{fix_dead_modules, clean_empty_dirs, FixResult};
+//! use std::path::Path;
+//!
+//! // Preview changes without applying
+//! let result = fix_dead_modules(
+//!     &dead_modules,
+//!     &module_info,
+//!     Path::new("/project"),
+//!     true,  // dry_run = true
+//! )?;
+//!
+//! println!("Would remove {} files", result.files_removed.len());
+//!
+//! // Apply changes
+//! let result = fix_dead_modules(&dead_modules, &module_info, root, false)?;
+//! clean_empty_dirs(root, false)?;
+//! ```
+//!
+//! # Performance Characteristics
+//!
 //! - Pre-compiled regex patterns (compile once, use many)
+//! - O(n) file operations where n = dead modules
 //! - Parallel-safe (stateless operations)
-//!
-//! Features:
-//! - Safe file deletion with dry-run support
-//! - Automatic `mod xyz;` declaration removal from parent modules
-//! - Empty directory cleanup
-//! - Comprehensive logging of all actions
 
 use std::collections::HashMap;
 use std::fs;

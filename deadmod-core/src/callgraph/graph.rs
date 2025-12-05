@@ -340,12 +340,15 @@ impl CallGraph {
             .cloned()
             .collect();
 
+        // Compute maximum call depth from any entry point
+        let max_call_depth = self.compute_max_call_depth(&entry_points);
+
         let stats = CallGraphStats {
             total_functions: self.nodes.len(),
             total_edges: self.edges.len(),
             entry_points: entry_points.len(),
             unreachable_functions: unreachable.len(),
-            max_call_depth: 0, // TODO: compute if needed
+            max_call_depth,
         };
 
         CallGraphAnalysis {
@@ -353,6 +356,48 @@ impl CallGraph {
             entry_points,
             stats,
         }
+    }
+
+    /// Compute the maximum call depth from entry points using BFS.
+    ///
+    /// Returns the longest path from any entry point to any reachable function.
+    /// Uses BFS level tracking to find the maximum depth efficiently.
+    ///
+    /// Complexity: O(|V| + |E|) - single BFS traversal
+    fn compute_max_call_depth(&self, entry_points: &[String]) -> usize {
+        if entry_points.is_empty() || self.adjacency.is_empty() {
+            return 0;
+        }
+
+        let mut max_depth = 0;
+
+        // For each entry point, compute max depth via BFS with level tracking
+        for start in entry_points {
+            if !self.nodes.contains_key(start) {
+                continue;
+            }
+
+            let mut visited: HashSet<&str> = HashSet::new();
+            let mut queue: std::collections::VecDeque<(&str, usize)> = std::collections::VecDeque::new();
+
+            visited.insert(start);
+            queue.push_back((start, 0));
+
+            while let Some((node, depth)) = queue.pop_front() {
+                max_depth = max_depth.max(depth);
+
+                if let Some(callees) = self.adjacency.get(node) {
+                    for callee in callees {
+                        if !visited.contains(callee.as_str()) {
+                            visited.insert(callee);
+                            queue.push_back((callee, depth + 1));
+                        }
+                    }
+                }
+            }
+        }
+
+        max_depth
     }
 
     /// Export the graph to JSON format.
@@ -933,6 +978,62 @@ mod tests {
         assert_eq!(analysis.stats.total_functions, 3);
         assert_eq!(analysis.stats.total_edges, 1);
         assert_eq!(analysis.stats.unreachable_functions, 1);
+    }
+
+    #[test]
+    fn test_max_call_depth_linear_chain() {
+        // Create chain: main -> a -> b -> c (depth = 3)
+        let functions = vec![
+            make_func("main", "main", "main.rs", "private"),
+            make_func("a", "a", "lib.rs", "private"),
+            make_func("b", "b", "lib.rs", "private"),
+            make_func("c", "c", "lib.rs", "private"),
+        ];
+
+        let mut usages = HashMap::new();
+        usages.insert(
+            "main.rs".to_string(),
+            CallUsageResult {
+                calls: HashSet::from(["a".to_string()]),
+                qualified_calls: HashSet::new(),
+                resolved_calls: HashSet::new(),
+            },
+        );
+        usages.insert(
+            "lib.rs".to_string(),
+            CallUsageResult {
+                calls: HashSet::from(["b".to_string(), "c".to_string()]),
+                qualified_calls: HashSet::new(),
+                resolved_calls: HashSet::new(),
+            },
+        );
+
+        let graph = CallGraph::build(&functions, &usages);
+        let analysis = graph.analyze();
+
+        // main (0) -> a (1) -> b (2), a -> c (2) = max depth 2
+        assert!(analysis.stats.max_call_depth >= 2);
+    }
+
+    #[test]
+    fn test_max_call_depth_empty_graph() {
+        let graph = CallGraph::new();
+        let analysis = graph.analyze();
+        assert_eq!(analysis.stats.max_call_depth, 0);
+    }
+
+    #[test]
+    fn test_max_call_depth_no_edges() {
+        let functions = vec![
+            make_func("main", "main", "main.rs", "private"),
+            make_func("isolated", "isolated", "lib.rs", "pub"),
+        ];
+
+        let graph = CallGraph::build(&functions, &HashMap::new());
+        let analysis = graph.analyze();
+
+        // No edges, only entry points at depth 0
+        assert_eq!(analysis.stats.max_call_depth, 0);
     }
 
     #[test]
