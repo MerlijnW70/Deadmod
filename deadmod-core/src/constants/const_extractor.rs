@@ -12,6 +12,8 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 use syn::{visit::Visit, File, ImplItem, Item, ItemConst, ItemImpl, ItemMod, ItemStatic, Visibility};
 
+use crate::common::visibility_str;
+
 /// Information about a constant or static definition.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConstDef {
@@ -49,22 +51,6 @@ impl ConstExtractor {
         }
     }
 
-    fn visibility_str(v: &Visibility) -> &'static str {
-        match v {
-            Visibility::Public(_) => "pub",
-            Visibility::Restricted(r) => {
-                if r.path.is_ident("crate") {
-                    "pub(crate)"
-                } else if r.path.is_ident("super") {
-                    "pub(super)"
-                } else {
-                    "pub(restricted)"
-                }
-            }
-            Visibility::Inherited => "private",
-        }
-    }
-
     fn build_module_path(&self) -> String {
         self.current_mod.join("::")
     }
@@ -75,7 +61,7 @@ impl ConstExtractor {
             file: self.file_path.clone(),
             is_static: false,
             is_mutable: false,
-            visibility: Self::visibility_str(vis).to_string(),
+            visibility: visibility_str(vis).to_string(),
             module_path: self.build_module_path(),
             impl_type: self.current_impl.clone(),
         });
@@ -87,7 +73,7 @@ impl ConstExtractor {
             file: self.file_path.clone(),
             is_static: true,
             is_mutable: is_mut,
-            visibility: Self::visibility_str(vis).to_string(),
+            visibility: visibility_str(vis).to_string(),
             module_path: self.build_module_path(),
             impl_type: self.current_impl.clone(),
         });

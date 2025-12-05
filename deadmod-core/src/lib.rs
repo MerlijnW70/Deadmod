@@ -55,6 +55,7 @@
 // Core modules (always available)
 pub mod builder;
 pub mod cache;
+pub mod common;
 pub mod config;
 pub mod detect;
 pub mod error;

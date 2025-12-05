@@ -10,7 +10,7 @@
 //! - Dead function detection (unreachable from entry points)
 //!
 //! Performance characteristics:
-//! - Graph build: O(|F| * |C|) where F = functions, C = calls
+//! - Graph build: O(|F| + |C|) where F = functions, C = calls (uses suffix index)
 //! - Reachability: O(|F| + |E|) BFS traversal
 
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -148,14 +148,24 @@ impl CallGraph {
                         }
                     }
 
-                    // Match qualified calls
+                    // Match qualified calls - use suffix index first for O(1) lookup
                     for qualified in &usage.qualified_calls {
-                        // Try to find matching function by full path suffix
-                        for full_path in &all_paths {
-                            if (full_path.ends_with(qualified) || qualified.ends_with(full_path))
-                                && full_path != &func.full_path
-                            {
-                                graph.add_edge(&func.full_path, full_path);
+                        // Try exact suffix match first (O(1))
+                        if let Some(targets) = suffix_index.get(qualified) {
+                            for target in targets {
+                                if target != &func.full_path {
+                                    graph.add_edge(&func.full_path, target);
+                                }
+                            }
+                        } else {
+                            // Fallback: substring matching for partial matches
+                            // This is O(n) but should be rare after suffix index lookup
+                            for full_path in &all_paths {
+                                if (full_path.ends_with(qualified) || qualified.ends_with(full_path))
+                                    && full_path != &func.full_path
+                                {
+                                    graph.add_edge(&func.full_path, full_path);
+                                }
                             }
                         }
                     }

@@ -19,6 +19,10 @@ use syn::{File, Item, ItemMod, UsePath, UseTree, Visibility as SynVisibility};
 /// Rust path keywords that should not be treated as module dependencies.
 const PATH_KEYWORDS: &[&str] = &["self", "super", "crate"];
 
+/// Maximum file size to parse (10 MB).
+/// Files larger than this are skipped to prevent memory issues and stack overflow.
+const MAX_FILE_SIZE: usize = 10_000_000;
+
 /// Visibility level of a module or item.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Visibility {
@@ -324,6 +328,14 @@ pub fn parse_single_module(path: &Path) -> ParseResult {
         }
     };
 
+    // Skip files that are too large to prevent memory issues
+    if content.len() > MAX_FILE_SIZE {
+        return ParseResult::Skipped(
+            path.to_path_buf(),
+            format!("File too large ({} bytes, max {})", content.len(), MAX_FILE_SIZE),
+        );
+    }
+
     let mut info = ModuleInfo::new(path.to_path_buf());
     if let Err(e) = extract_uses_and_decls(&content, &mut info.refs) {
         return ParseResult::Skipped(path.to_path_buf(), format!("AST error: {}", e));
@@ -337,6 +349,15 @@ pub fn parse_single_module(path: &Path) -> ParseResult {
 pub fn parse_single_module_strict(path: &Path) -> Result<(String, ModuleInfo)> {
     let content = fs::read_to_string(path)
         .with_context(|| format!("Failed to read: {}", path.display()))?;
+
+    // Reject files that are too large to prevent memory issues
+    anyhow::ensure!(
+        content.len() <= MAX_FILE_SIZE,
+        "File too large ({} bytes, max {}): {}",
+        content.len(),
+        MAX_FILE_SIZE,
+        path.display()
+    );
 
     let mut info = ModuleInfo::new(path.to_path_buf());
     extract_uses_and_decls(&content, &mut info.refs)

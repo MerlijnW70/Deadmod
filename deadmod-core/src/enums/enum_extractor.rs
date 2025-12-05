@@ -9,7 +9,9 @@
 
 use serde::{Deserialize, Serialize};
 use std::path::Path;
-use syn::{visit::Visit, File, Item, ItemEnum, ItemMod, Visibility};
+use syn::{visit::Visit, File, Item, ItemEnum, ItemMod};
+
+use crate::common::visibility_str;
 
 /// Information about an enum variant definition.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -44,22 +46,6 @@ impl EnumVariantExtractor {
         }
     }
 
-    fn visibility_str(v: &Visibility) -> &'static str {
-        match v {
-            Visibility::Public(_) => "pub",
-            Visibility::Restricted(r) => {
-                if r.path.is_ident("crate") {
-                    "pub(crate)"
-                } else if r.path.is_ident("super") {
-                    "pub(super)"
-                } else {
-                    "pub(restricted)"
-                }
-            }
-            Visibility::Inherited => "private",
-        }
-    }
-
     fn build_module_path(&self) -> String {
         self.current_mod.join("::")
     }
@@ -75,7 +61,7 @@ impl<'ast> Visit<'ast> for EnumVariantExtractor {
                 ..
             }) => {
                 let enum_name = ident.to_string();
-                let visibility = Self::visibility_str(vis);
+                let visibility = visibility_str(vis);
 
                 for variant in variants {
                     let variant_name = variant.ident.to_string();

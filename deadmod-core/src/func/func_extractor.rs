@@ -13,6 +13,8 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 use syn::{visit::Visit, Attribute, File, ImplItem, ImplItemFn, Item, ItemFn, ItemImpl, ItemMod, Visibility};
 
+use crate::common::visibility_str;
+
 /// Information about a single function.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FunctionInfo {
@@ -52,23 +54,6 @@ impl FunctionExtractor {
         }
     }
 
-    fn visibility_str(v: &Visibility) -> &'static str {
-        match v {
-            Visibility::Public(_) => "pub",
-            Visibility::Restricted(r) => {
-                // Check for pub(crate), pub(super), etc.
-                if r.path.is_ident("crate") {
-                    "pub(crate)"
-                } else if r.path.is_ident("super") {
-                    "pub(super)"
-                } else {
-                    "pub(restricted)"
-                }
-            }
-            Visibility::Inherited => "private",
-        }
-    }
-
     fn build_full_path(&self, name: &str) -> String {
         let mut parts = self.current_mod.clone();
         if let Some(ref impl_type) = self.current_impl {
@@ -92,7 +77,7 @@ impl FunctionExtractor {
         self.results.push(FunctionInfo {
             name: name.to_string(),
             full_path: self.build_full_path(name),
-            visibility: Self::visibility_str(vis).to_string(),
+            visibility: visibility_str(vis).to_string(),
             file: self.file_path.clone(),
             is_method,
             impl_type: self.current_impl.clone(),

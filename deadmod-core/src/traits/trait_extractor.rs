@@ -14,6 +14,8 @@ use syn::{
     TraitItemFn, Visibility,
 };
 
+use crate::common::visibility_str;
+
 /// Information about a method defined in a trait.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TraitMethodDef {
@@ -92,22 +94,6 @@ impl TraitExtractor {
         }
     }
 
-    fn visibility_str(v: &Visibility) -> &'static str {
-        match v {
-            Visibility::Public(_) => "pub",
-            Visibility::Restricted(r) => {
-                if r.path.is_ident("crate") {
-                    "pub(crate)"
-                } else if r.path.is_ident("super") {
-                    "pub(super)"
-                } else {
-                    "pub(restricted)"
-                }
-            }
-            Visibility::Inherited => "private",
-        }
-    }
-
     fn build_path(&self, components: &[&str]) -> String {
         let mut parts: Vec<String> = self.current_mod.clone();
         parts.extend(components.iter().map(|s| s.to_string()));
@@ -127,7 +113,7 @@ impl TraitExtractor {
             trait_name: trait_name.to_string(),
             method_name: method_name.to_string(),
             full_path,
-            visibility: Self::visibility_str(vis).to_string(),
+            visibility: visibility_str(vis).to_string(),
             is_required,
             file: self.file_path.clone(),
         });
@@ -158,7 +144,7 @@ impl TraitExtractor {
             type_name: type_name.to_string(),
             method_name: method_name.to_string(),
             full_id,
-            visibility: Self::visibility_str(vis).to_string(),
+            visibility: visibility_str(vis).to_string(),
             is_static,
             file: self.file_path.clone(),
             module_path: self.build_path(&[]),
