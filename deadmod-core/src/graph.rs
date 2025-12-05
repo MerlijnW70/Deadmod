@@ -48,6 +48,9 @@ pub fn build_graph(mods: &HashMap<String, ModuleInfo>) -> DiGraphMap<&str, ()> {
 ///
 /// # Returns
 /// Set of all module names reachable from any root
+///
+/// # Logging
+/// Logs a warning for any root not found in the graph (helpful for debugging).
 pub fn reachable_from_roots<'a>(
     g: &DiGraphMap<&'a str, ()>,
     roots: impl IntoIterator<Item = &'a str>,
@@ -57,11 +60,15 @@ pub fn reachable_from_roots<'a>(
 
     // Initialize BFS with all valid root nodes
     for root in roots {
-        // Combined check: node exists AND not already visited
-        if g.contains_node(root) && visited.insert(root) {
-            queue.push_back(root);
+        if g.contains_node(root) {
+            // Combined check: node exists AND not already visited
+            if visited.insert(root) {
+                queue.push_back(root);
+            }
+        } else {
+            // Log warning for missing roots (helpful for debugging configuration issues)
+            eprintln!("[WARN] Root module not found in graph: '{}'", root);
         }
-        // Note: Missing roots are silently skipped - the caller handles validation
     }
 
     // Perform single, unified BFS traversal

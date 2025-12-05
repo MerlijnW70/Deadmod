@@ -70,7 +70,10 @@ pub mod usage;
 
 // Re-exports for convenience
 pub use extractor::{extract_callgraph_functions, FunctionDef};
-pub use graph::{CallGraph, CallGraphAnalysis, CallGraphStats};
+pub use graph::{
+    CallGraph, CallGraphAnalysis, CallGraphStats,
+    VisualizerEdge, VisualizerGraph, VisualizerNode, VisualizerStats,
+};
 pub use path_resolver::{
     collect_use_statements, resolve_call_full, resolve_call_path, segments_to_path,
     ModulePathContext, ResolvedCall, UseMap,

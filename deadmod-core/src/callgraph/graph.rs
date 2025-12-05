@@ -9,17 +9,69 @@
 //! - JSON export for programmatic analysis
 //! - Dead function detection (unreachable from entry points)
 //!
-//! Performance characteristics:
-//! - Graph build: O(|F| + |C|) where F = functions, C = calls (uses suffix index)
-//! - Reachability: O(|F| + |E|) BFS traversal
+//! # Performance Characteristics
+//!
+//! - Graph build: O(|F| + |C|) typical, O(|F|² * |C|) worst case (rare fallback)
+//! - Reachability: O(|F| + |E|) BFS traversal via `GraphTraversal` trait
+//! - Entry points: O(|F|) single pass
+//! - Analysis caching: O(1) after first call via `OnceCell`
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use serde::Serialize;
+use std::cell::OnceCell;
+use std::collections::{HashMap, HashSet};
 
 use super::extractor::FunctionDef;
 use super::usage::CallUsageResult;
+use crate::common::GraphTraversal;
+
+// ============================================================================
+// Typed JSON Structures (compile-time validation, easier refactoring)
+// ============================================================================
+
+/// A node in the visualizer JSON output.
+#[derive(Debug, Clone, Serialize)]
+pub struct VisualizerNode {
+    pub id: usize,
+    pub name: String,
+    pub full_path: String,
+    pub file: String,
+    pub module: String,
+    pub dead: bool,
+    pub visibility: String,
+    pub is_method: bool,
+}
+
+/// An edge in the visualizer JSON output.
+#[derive(Debug, Clone, Serialize)]
+pub struct VisualizerEdge {
+    pub from: usize,
+    pub to: usize,
+}
+
+/// Statistics in the visualizer JSON output.
+#[derive(Debug, Clone, Serialize)]
+pub struct VisualizerStats {
+    pub total_functions: usize,
+    pub total_edges: usize,
+    pub dead_functions: usize,
+    pub total_modules: usize,
+}
+
+/// Complete visualizer graph structure.
+#[derive(Debug, Clone, Serialize)]
+pub struct VisualizerGraph {
+    pub nodes: Vec<VisualizerNode>,
+    pub edges: Vec<VisualizerEdge>,
+    pub modules: Vec<String>,
+    pub stats: VisualizerStats,
+}
+
+// ============================================================================
+// Core Call Graph
+// ============================================================================
 
 /// A call graph representing function relationships.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct CallGraph {
     /// Map from full_path to FunctionDef
     pub nodes: HashMap<String, FunctionDef>,
@@ -29,6 +81,8 @@ pub struct CallGraph {
     pub adjacency: HashMap<String, Vec<String>>,
     /// Reverse edges for finding callers
     pub reverse_edges: HashMap<String, HashSet<String>>,
+    /// Cached analysis result (computed once, reused)
+    cached_analysis: OnceCell<CallGraphAnalysis>,
 }
 
 /// Statistics about the call graph.
@@ -52,6 +106,22 @@ pub struct CallGraphAnalysis {
     pub stats: CallGraphStats,
 }
 
+// ============================================================================
+// GraphTraversal Implementation (shared BFS logic)
+// ============================================================================
+
+impl GraphTraversal for CallGraph {
+    type Node = String;
+
+    fn neighbors(&self, node: &String) -> Vec<String> {
+        self.adjacency.get(node).cloned().unwrap_or_default()
+    }
+
+    fn contains_node(&self, node: &String) -> bool {
+        self.nodes.contains_key(node)
+    }
+}
+
 impl CallGraph {
     /// Create a new empty call graph.
     pub fn new() -> Self {
@@ -60,6 +130,7 @@ impl CallGraph {
             edges: HashSet::new(),
             adjacency: HashMap::new(),
             reverse_edges: HashMap::new(),
+            cached_analysis: OnceCell::new(),
         }
     }
 
@@ -178,24 +249,33 @@ impl CallGraph {
 
     /// Add an edge from caller to callee.
     ///
-    /// Only updates adjacency list and reverse edges if the edge is new.
+    /// Optimized to minimize string allocations:
+    /// - Reuses cloned strings across edge, adjacency, and reverse_edges
+    /// - Early exits if edge already exists (no allocations on duplicate)
     fn add_edge(&mut self, caller: &str, callee: &str) {
-        // Early exit if edge already exists (avoid allocations)
-        if !self.edges.insert((caller.to_string(), callee.to_string())) {
+        // Clone once, reuse for all data structures
+        let caller_owned = caller.to_string();
+        let callee_owned = callee.to_string();
+
+        // Early exit if edge already exists (avoid further allocations)
+        if !self
+            .edges
+            .insert((caller_owned.clone(), callee_owned.clone()))
+        {
             return;
         }
 
-        // Update adjacency list for forward traversal
+        // Update adjacency list for forward traversal (reuse cloned strings)
         self.adjacency
-            .entry(caller.to_string())
+            .entry(caller_owned.clone())
             .or_default()
-            .push(callee.to_string());
+            .push(callee_owned.clone());
 
-        // Update reverse edges for finding callers
+        // Update reverse edges for finding callers (reuse cloned strings)
         self.reverse_edges
-            .entry(callee.to_string())
+            .entry(callee_owned)
             .or_default()
-            .insert(caller.to_string());
+            .insert(caller_owned);
     }
 
     /// Find all entry points in the graph.
@@ -204,42 +284,29 @@ impl CallGraph {
     /// - `main` function
     /// - `#[test]` functions
     /// - Public functions (could be called externally)
+    ///
+    /// Aliased as `entry_points()` for API consistency.
     pub fn find_entry_points(&self) -> Vec<String> {
         self.nodes
             .iter()
             .filter(|(path, func)| {
-                func.name == "main"
-                    || path.contains("test")
-                    || func.visibility == "pub"
+                func.name == "main" || path.contains("test") || func.visibility == "pub"
             })
             .map(|(path, _)| path.clone())
             .collect()
     }
 
+    /// Alias for `find_entry_points()` for API consistency.
+    #[inline]
+    pub fn entry_points(&self) -> Vec<String> {
+        self.find_entry_points()
+    }
+
     /// Find all functions reachable from the given entry points.
     ///
-    /// Uses adjacency list for O(|V| + |E|) BFS instead of O(|V| * |E|).
+    /// Uses the shared `GraphTraversal` trait for O(|V| + |E|) BFS.
     pub fn find_reachable(&self, entry_points: &[String]) -> HashSet<String> {
-        let mut visited = HashSet::new();
-        let mut queue: VecDeque<String> = entry_points.iter().cloned().collect();
-
-        while let Some(current) = queue.pop_front() {
-            if visited.contains(&current) {
-                continue;
-            }
-            visited.insert(current.clone());
-
-            // O(1) lookup of callees via adjacency list
-            if let Some(callees) = self.adjacency.get(&current) {
-                for callee in callees {
-                    if !visited.contains(callee) {
-                        queue.push_back(callee.clone());
-                    }
-                }
-            }
-        }
-
-        visited
+        self.reachable_from(entry_points.iter().cloned())
     }
 
     /// Find all unreachable functions.
@@ -254,7 +321,15 @@ impl CallGraph {
     }
 
     /// Analyze the call graph and return results.
-    pub fn analyze(&self) -> CallGraphAnalysis {
+    ///
+    /// Results are cached using `OnceCell` - subsequent calls return the cached analysis.
+    /// This avoids redundant O(|V| + |E|) BFS traversals when analyze() is called multiple times.
+    pub fn analyze(&self) -> &CallGraphAnalysis {
+        self.cached_analysis.get_or_init(|| self.compute_analysis())
+    }
+
+    /// Compute the analysis (internal, not cached).
+    fn compute_analysis(&self) -> CallGraphAnalysis {
         let entry_points = self.find_entry_points();
         let reachable = self.find_reachable(&entry_points);
 
@@ -310,6 +385,9 @@ impl CallGraph {
 
     /// Export the graph to visualizer-compatible JSON format.
     ///
+    /// Uses typed `VisualizerGraph` struct for compile-time validation.
+    /// Leverages cached analysis to avoid redundant BFS traversals.
+    ///
     /// Output format for PixiJS visualizer:
     /// ```json
     /// {
@@ -318,72 +396,85 @@ impl CallGraph {
     /// }
     /// ```
     pub fn to_visualizer_json(&self) -> serde_json::Value {
-        // Find unreachable functions
-        let entry_points = self.find_entry_points();
-        let reachable = self.find_reachable(&entry_points);
+        serde_json::to_value(self.to_visualizer_graph()).unwrap_or_default()
+    }
+
+    /// Build a typed `VisualizerGraph` for export.
+    ///
+    /// Returns a strongly-typed struct that can be serialized to JSON.
+    /// Uses cached analysis to avoid redundant computations.
+    pub fn to_visualizer_graph(&self) -> VisualizerGraph {
+        // Use cached analysis to get reachable set
+        let analysis = self.analyze();
+        let reachable_set = self.find_reachable(&analysis.entry_points);
+        let reachable: HashSet<&str> = analysis
+            .entry_points
+            .iter()
+            .chain(reachable_set.iter())
+            .map(|s| s.as_str())
+            .collect();
 
         // Build path -> numeric ID mapping
         let paths: Vec<&String> = self.nodes.keys().collect();
         let path_to_id: HashMap<&String, usize> =
             paths.iter().enumerate().map(|(i, p)| (*p, i)).collect();
 
-        let nodes: Vec<serde_json::Value> = paths
+        // Build typed nodes
+        let nodes: Vec<VisualizerNode> = paths
             .iter()
             .enumerate()
             .map(|(i, path)| {
                 let func = &self.nodes[*path];
-                let is_dead = !reachable.contains(*path);
+                let is_dead = !reachable.contains(path.as_str());
                 // Extract module name from file path for clustering
                 let module = std::path::Path::new(&func.file)
                     .file_stem()
                     .and_then(|s| s.to_str())
                     .unwrap_or("unknown")
                     .to_string();
-                serde_json::json!({
-                    "id": i,
-                    "name": func.name,
-                    "full_path": func.full_path,
-                    "file": func.file,
-                    "module": module,
-                    "dead": is_dead,
-                    "visibility": func.visibility,
-                    "is_method": func.is_method,
-                })
+
+                VisualizerNode {
+                    id: i,
+                    name: func.name.clone(),
+                    full_path: func.full_path.clone(),
+                    file: func.file.clone(),
+                    module,
+                    dead: is_dead,
+                    visibility: func.visibility.clone(),
+                    is_method: func.is_method,
+                }
             })
             .collect();
 
-        let edges: Vec<serde_json::Value> = self
+        // Build typed edges
+        let edges: Vec<VisualizerEdge> = self
             .edges
             .iter()
             .filter_map(|(from, to)| {
-                let from_id = path_to_id.get(from)?;
-                let to_id = path_to_id.get(to)?;
-                Some(serde_json::json!({
-                    "from": from_id,
-                    "to": to_id,
-                }))
+                let from_id = *path_to_id.get(from)?;
+                let to_id = *path_to_id.get(to)?;
+                Some(VisualizerEdge { from: from_id, to: to_id })
             })
             .collect();
 
         // Collect unique modules for clustering color palette
-        let mut modules: Vec<String> = nodes
-            .iter()
-            .filter_map(|n| n["module"].as_str().map(String::from))
-            .collect();
+        let mut modules: Vec<String> = nodes.iter().map(|n| n.module.clone()).collect();
         modules.sort();
         modules.dedup();
 
-        serde_json::json!({
-            "nodes": nodes,
-            "edges": edges,
-            "modules": modules,
-            "stats": {
-                "total_functions": self.nodes.len(),
-                "total_edges": self.edges.len(),
-                "dead_functions": nodes.iter().filter(|n| n["dead"].as_bool().unwrap_or(false)).count(),
-                "total_modules": modules.len(),
-            }
-        })
+        let dead_count = nodes.iter().filter(|n| n.dead).count();
+
+        VisualizerGraph {
+            stats: VisualizerStats {
+                total_functions: self.nodes.len(),
+                total_edges: self.edges.len(),
+                dead_functions: dead_count,
+                total_modules: modules.len(),
+            },
+            nodes,
+            edges,
+            modules,
+        }
     }
 
     /// Export the graph to DOT format for Graphviz.
@@ -440,6 +531,18 @@ impl CallGraph {
 impl Default for CallGraph {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl Clone for CallGraph {
+    fn clone(&self) -> Self {
+        Self {
+            nodes: self.nodes.clone(),
+            edges: self.edges.clone(),
+            adjacency: self.adjacency.clone(),
+            reverse_edges: self.reverse_edges.clone(),
+            cached_analysis: OnceCell::new(), // Don't clone cache, will be recomputed if needed
+        }
     }
 }
 

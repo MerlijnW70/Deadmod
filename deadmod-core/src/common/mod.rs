@@ -5,6 +5,8 @@
 
 mod visibility;
 mod path_builder;
+mod graph_trait;
 
 pub use visibility::visibility_str;
 pub use path_builder::ModulePathBuilder;
+pub use graph_trait::GraphTraversal;

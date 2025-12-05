@@ -68,6 +68,9 @@ pub mod root;
 pub mod scan;
 pub mod workspace;
 
+// Common trait re-exports
+pub use common::GraphTraversal;
+
 // Feature-gated modules
 #[cfg(feature = "fix")]
 pub mod fix;
@@ -162,6 +165,7 @@ pub use callgraph::{
     collect_use_statements, resolve_call_full, resolve_call_path, segments_to_path,
     CallGraph, CallGraphAnalysis, CallGraphStats, CallgraphExtractionResult, CallUsageResult,
     FunctionDef, ModulePathContext, ResolvedCall, UseMap,
+    VisualizerEdge, VisualizerGraph, VisualizerNode, VisualizerStats,
 };
 
 #[cfg(feature = "html")]
